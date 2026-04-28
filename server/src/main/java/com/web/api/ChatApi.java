@@ -68,6 +68,12 @@ public class ChatApi {
         return chatRepository.findByUser(idreciver);
     }
 
+    // Endpoint dùng cho polling - không markAsRead để tránh side effect không cần thiết
+    @GetMapping("/staff/getListChatOnly")
+    public List<Chatting> getListChatOnly(@RequestParam("idreciver") Long idreciver){
+        return chatRepository.findByUser(idreciver);
+    }
+
 
     public void sort(ArrayList<ChatDto> sub) {
         Collections.sort(sub, new Comparator<ChatDto>() {

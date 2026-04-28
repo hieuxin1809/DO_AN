@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import avatar from "../../assest/images/avatar.png";
@@ -13,21 +13,8 @@ const StaffChat = () => {
   const [email, setEmail] = useState(null);
   const [newMessagesCount, setNewMessagesCount] = useState({});
 
-  const extractHeaderValue = (headerValue) => {
-    if (Array.isArray(headerValue)) {
-      return headerValue[0];
-    }
-    return headerValue;
-  };
-
-  const normalizeSenderId = (rawSender) => {
-    if (rawSender === undefined || rawSender === null) {
-      return null;
-    }
-    const senderStr = String(rawSender);
-    const match = senderStr.match(/\d+/);
-    return match ? match[0] : null;
-  };
+  // Refs để tránh stale closure trong WebSocket callback
+  const currentUserIdRef = useRef(null);
 
   const loadChatByUserId = async (userId) => {
     if (!userId) return;
@@ -41,7 +28,6 @@ const StaffChat = () => {
       }
     } catch (error) {
       console.error("Error fetching chat messages:", error);
-      setItemChat([]);
     }
   };
 
@@ -57,67 +43,126 @@ const StaffChat = () => {
       }
     } catch (error) {
       console.error("Error fetching user chat list:", error);
-      setItemUser([]);
     }
   };
 
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      const el = document.getElementById("listchatadmin");
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 100);
+  };
+
+  // Auto scroll khi itemChat thay đổi
   useEffect(() => {
-    const listChatAdmin = document.getElementById("listchatadmin");
-    if (listChatAdmin) {
-      listChatAdmin.scrollTop = listChatAdmin.scrollHeight;
-    }
+    const el = document.getElementById("listchatadmin");
+    if (el) el.scrollTop = el.scrollHeight;
   }, [itemChat]);
 
+  // Polling: mỗi 3 giây cập nhật cả danh sách user (badge) lẫn tin nhắn hiện tại
   useEffect(() => {
+    const timer = setInterval(async () => {
+      // ✅ Luôn cập nhật danh sách user để badge số tin chưa đọc luôn mới nhất
+      loadUserChatList();
+
+      // Nếu đang xem cuộc trò chuyện → cập nhật tin nhắn
+      const uid = currentUserIdRef.current;
+      if (!uid) return;
+      try {
+        const response = await getMethod(`/api/chat/staff/getListChatOnly?idreciver=${uid}`);
+        const result = await response.json();
+        if (Array.isArray(result)) {
+          setItemChat((prev) => {
+            if (prev.length !== result.length) {
+              return result;
+            }
+            return prev;
+          });
+        }
+      } catch (_) {}
+    }, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // Đọc URL params và load data ban đầu
     const initPageData = async () => {
       await loadUserChatList();
-      const uls = new URL(document.URL);
-      const id = uls.searchParams.get("user");
-      const emailFromUrl = uls.searchParams.get("email");
+      const params = new URL(document.URL).searchParams;
+      const id = params.get("user");
+      const emailFromUrl = params.get("email");
       if (id && emailFromUrl) {
+        currentUserIdRef.current = id;
         setEmail(emailFromUrl);
         await loadChatByUserId(id);
       }
     };
-
     initPageData();
 
     const userlc = localStorage.getItem("user");
     const userEmail = userlc ? JSON.parse(userlc)?.email : null;
+
     const sock = new SockJS("http://localhost:8080/hello");
     const stompClient = new Client({
       webSocketFactory: () => sock,
       onConnect: () => {
-        stompClient.subscribe("/users/queue/messages", async (msg) => {
-          const nativeHeaders = msg.headers?.nativeHeaders || {};
-          const senderHeader = extractHeaderValue(
-            msg.headers.sender ?? nativeHeaders.sender
-          );
-          const senderId = normalizeSenderId(senderHeader);
+        console.log("[WS Staff] Đã kết nối WebSocket thành công!");
 
-          const uls = new URL(document.URL);
-          const currentUserId = uls.searchParams.get("user");
+        stompClient.subscribe("/users/queue/messages", (msg) => {
+          console.log("[WS Staff] Nhận tin nhắn:", msg.body, "headers:", msg.headers);
 
-          if (currentUserId && (!senderId || String(senderId) === String(currentUserId))) {
-            await loadChatByUserId(currentUserId);
-            setTimeout(() => {
-              const listChatAdmin = document.getElementById("listchatadmin");
-              if (listChatAdmin) {
-                listChatAdmin.scrollTop = listChatAdmin.scrollHeight;
-              }
-            }, 100);
-          } else {
-            toast.info("Báº¡n cÃ³ tin nháº¯n má»›i!");
+          const isFile = Number(msg.headers?.isFile ?? 0) === 1;
+
+          // Parse senderId từ header (Long từ Java → string trên STOMP)
+          const rawSender = msg.headers?.sender;
+          const senderIdStr = rawSender != null ? String(rawSender).replace(/\D/g, "") : null;
+          const senderId = senderIdStr && senderIdStr.length > 0 ? senderIdStr : null;
+
+          const currentUserId = currentUserIdRef.current;
+          console.log("[WS Staff] currentUserId:", currentUserId, "senderId:", senderId);
+
+          const isFromCurrentUser =
+            currentUserId &&
+            (!senderId || String(senderId) === String(currentUserId));
+
+          if (isFromCurrentUser) {
+            // ✅ Tin nhắn từ khách đang xem → thêm trực tiếp vào state (không cần HTTP)
+            setItemChat((prev) => [
+              ...prev,
+              {
+                sender: { id: senderId || currentUserId },
+                content: msg.body,
+                isFile: isFile,
+              },
+            ]);
+            scrollToBottom();
+          } else if (currentUserId && senderId && String(senderId) !== String(currentUserId)) {
+            // Tin nhắn từ khách KHÁC → badge + toast
+            toast.info("Bạn có tin nhắn mới!");
+            setNewMessagesCount((prev) => ({
+              ...prev,
+              [senderId]: (prev[senderId] || 0) + 1,
+            }));
+          } else if (!currentUserId) {
+            // Không đang xem cuộc trò chuyện nào
+            toast.info("Bạn có tin nhắn mới!");
             if (senderId) {
-              setNewMessagesCount((prevCount) => ({
-                ...prevCount,
-                [senderId]: (prevCount[senderId] || 0) + 1,
+              setNewMessagesCount((prev) => ({
+                ...prev,
+                [senderId]: (prev[senderId] || 0) + 1,
               }));
             }
           }
 
-          await loadUserChatList();
+          // Luôn cập nhật sidebar (badge count từ DB)
+          loadUserChatList();
         });
+      },
+      onDisconnect: () => {
+        console.log("[WS Staff] WebSocket ngắt kết nối");
+      },
+      onStompError: (frame) => {
+        console.error("[WS Staff] Lỗi STOMP:", frame);
       },
       connectHeaders: {
         username: userEmail,
@@ -133,8 +178,7 @@ const StaffChat = () => {
   }, []);
 
   const sendMessage = () => {
-    const uls = new URL(document.URL);
-    const id = uls.searchParams.get("user");
+    const id = new URL(document.URL).searchParams.get("user");
     const messageContent = document.getElementById("contentmess").value;
     const userlc = localStorage.getItem("user");
     const userEmail = userlc ? JSON.parse(userlc)?.email : null;
@@ -145,53 +189,34 @@ const StaffChat = () => {
         body: messageContent,
       });
 
-      const newMessage = {
-        sender: userEmail,
-        content: messageContent,
-        isFile: false,
-      };
-
-      setItemChat((prevChat) => [...(Array.isArray(prevChat) ? prevChat : []), newMessage]);
-      setTimeout(() => {
-        const listChatAdmin = document.getElementById("listchatadmin");
-        if (listChatAdmin) {
-          listChatAdmin.scrollTop = listChatAdmin.scrollHeight;
-        }
-      }, 100);
+      // Optimistic update: thêm tin nhắn ngay vào state
+      setItemChat((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { sender: userEmail, content: messageContent, isFile: false },
+      ]);
+      scrollToBottom();
 
       setItemUser((prevUsers) => {
         if (!Array.isArray(prevUsers)) return prevUsers;
-        const newUsers = [...prevUsers];
-        const rcIndex = newUsers.findIndex((u) => String(u?.user?.id) === String(id));
-        if (rcIndex > -1) {
-          const [rcObj] = newUsers.splice(rcIndex, 1);
-          newUsers.unshift(rcObj);
-        }
-        return newUsers;
+        const updated = [...prevUsers];
+        const idx = updated.findIndex((u) => String(u?.user?.id) === String(id));
+        if (idx > -1) updated.unshift(...updated.splice(idx, 1));
+        return updated;
       });
 
       document.getElementById("contentmess").value = "";
     }
   };
 
-  async function loadMessage(user) {
-    if (!user || !user.id) {
-      console.error("Invalid user object passed to loadMessage:", user);
-      return;
-    }
-
-    try {
-      setNewMessagesCount((prevState) => {
-        const newState = { ...prevState };
-        delete newState[user.id];
-        return newState;
-      });
-
-      window.location.href = `chat?user=${user.id}&email=${user.email}`;
-    } catch (error) {
-      console.error("Error loading messages:", error);
-    }
-  }
+  const loadMessage = (user) => {
+    if (!user || !user.id) return;
+    setNewMessagesCount((prev) => {
+      const next = { ...prev };
+      delete next[user.id];
+      return next;
+    });
+    window.location.href = `chat?user=${user.id}&email=${user.email}`;
+  };
 
   const sendFileMessage = async () => {
     const fileInput = document.getElementById("btnsendfile");
@@ -202,8 +227,7 @@ const StaffChat = () => {
 
     try {
       const link = await uploadSingleFile(fileInput);
-      const uls = new URL(document.URL);
-      const id = uls.searchParams.get("user");
+      const id = new URL(document.URL).searchParams.get("user");
 
       if (client && client.connected && id) {
         client.publish({
@@ -211,42 +235,28 @@ const StaffChat = () => {
           body: link,
         });
 
-        const newMessage = {
-          sender: userEmail,
-          content: link,
-          isFile: true,
-        };
-
-        setItemChat((prevChat) => [...(Array.isArray(prevChat) ? prevChat : []), newMessage]);
-        setTimeout(() => {
-          const listChatAdmin = document.getElementById("listchatadmin");
-          if (listChatAdmin) {
-            listChatAdmin.scrollTop = listChatAdmin.scrollHeight;
-          }
-        }, 100);
+        setItemChat((prev) => [
+          ...(Array.isArray(prev) ? prev : []),
+          { sender: userEmail, content: link, isFile: true },
+        ]);
+        scrollToBottom();
 
         setItemUser((prevUsers) => {
           if (!Array.isArray(prevUsers)) return prevUsers;
-          const newUsers = [...prevUsers];
-          const rcIndex = newUsers.findIndex((u) => String(u?.user?.id) === String(id));
-          if (rcIndex > -1) {
-            const [rcObj] = newUsers.splice(rcIndex, 1);
-            newUsers.unshift(rcObj);
-          }
-          return newUsers;
+          const updated = [...prevUsers];
+          const idx = updated.findIndex((u) => String(u?.user?.id) === String(id));
+          if (idx > -1) updated.unshift(...updated.splice(idx, 1));
+          return updated;
         });
       }
-
       fileInput.value = "";
     } catch (error) {
       console.error("Error sending file:", error);
     }
   };
 
-  const handleKeyDown = (event) => {
-    if (event.key === "Enter") {
-      sendMessage();
-    }
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") sendMessage();
   };
 
   const searchKey = async () => {
@@ -270,26 +280,27 @@ const StaffChat = () => {
           />
         </div>
         <ul className={styles.userList}>
-          {Array.isArray(itemUser) && itemUser.map((item, index) => {
-            const dbCount = item?.numUnread || 0;
-            const newCount = newMessagesCount[item?.user?.id] || 0;
-            const totalUnread = dbCount + newCount;
-            return (
-              <li
-                key={index}
-                className={styles.userItem}
-                onClick={() => item?.user && loadMessage(item.user)}
-              >
-                <img src={avatar} className={styles.avatar} alt="Avatar" />
-                <div className={styles.userInfo}>
-                  <span className={styles.userName}>{item?.user?.email || "Unknown"}</span>
-                </div>
-                {totalUnread > 0 && (
-                  <span className={styles.unreadBadge}>{totalUnread}</span>
-                )}
-              </li>
-            );
-          })}
+          {Array.isArray(itemUser) &&
+            itemUser.map((item, index) => {
+              const dbCount = item?.numUnread || 0;
+              const newCount = newMessagesCount[item?.user?.id] || 0;
+              const totalUnread = dbCount + newCount;
+              return (
+                <li
+                  key={index}
+                  className={styles.userItem}
+                  onClick={() => item?.user && loadMessage(item.user)}
+                >
+                  <img src={avatar} className={styles.avatar} alt="Avatar" />
+                  <div className={styles.userInfo}>
+                    <span className={styles.userName}>{item?.user?.email || "Unknown"}</span>
+                  </div>
+                  {totalUnread > 0 && (
+                    <span className={styles.unreadBadge}>{totalUnread}</span>
+                  )}
+                </li>
+              );
+            })}
         </ul>
       </div>
 
@@ -351,11 +362,7 @@ const StaffChat = () => {
               >
                 <i className="fa fa-image"></i>
               </button>
-              <button
-                onClick={sendMessage}
-                className={styles.sendButton}
-                id="sendmess"
-              >
+              <button onClick={sendMessage} className={styles.sendButton} id="sendmess">
                 <i className="fa fa-paper-plane"></i>
               </button>
               <input

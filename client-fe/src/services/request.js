@@ -34,8 +34,8 @@ async function uploadMultipleFile(listFile) {
     }
 }
 
-var token = localStorage.getItem("token");
 async function getMethod(url) {
+    var token = localStorage.getItem("token");
     if(url.includes(firstUrl) == false){
         url = firstUrl + url;
     }
@@ -49,6 +49,7 @@ async function getMethod(url) {
 }
 
 async function postMethod(url) {
+    var token = localStorage.getItem("token");
     if(url.includes(firstUrl) == false){
         url = firstUrl + url;
     }
@@ -62,6 +63,7 @@ async function postMethod(url) {
 }
 
 async function postMethodPayload(url, payload) {
+    var token = localStorage.getItem("token");
     if(url.includes(firstUrl) == false){
         url = firstUrl + url;
     }
@@ -77,6 +79,7 @@ async function postMethodPayload(url, payload) {
 }
 
 async function deleteMethod(url) {
+    var token = localStorage.getItem("token");
     if(url.includes(firstUrl) == false){
         url = firstUrl + url;
     }
@@ -90,6 +93,7 @@ async function deleteMethod(url) {
 }
 
 async function putMethod(url, payload) {
+    var token = localStorage.getItem("token");
     if(url.includes(firstUrl) == false){
         url = firstUrl + url;
     }
