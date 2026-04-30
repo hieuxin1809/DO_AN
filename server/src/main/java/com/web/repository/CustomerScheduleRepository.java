@@ -2,6 +2,7 @@ package com.web.repository;
 
 import com.web.entity.CustomerSchedule;
 import com.web.enums.CustomerSchedulePay;
+import com.web.enums.StatusCustomerSchedule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -43,4 +44,28 @@ public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedu
 
     @Query("select count(c.id) from CustomerSchedule c where c.vaccineScheduleTime.vaccineSchedule.vaccine.id = ?1")
     Integer countRegisByVaccine(Long vaccineId);
+
+    /**
+     * Đếm số mũi đã tiêm thành công (confirmed) của 1 user cho 1 loại vaccine.
+     * Truyền enum qua @Param thay vì inline trong JPQL để tránh InvalidPathException.
+     */
+    @Query("SELECT COUNT(c) FROM CustomerSchedule c " +
+           "WHERE c.user.id = :userId " +
+           "AND c.vaccineScheduleTime.vaccineSchedule.vaccine.id = :vaccineId " +
+           "AND c.statusCustomerSchedule = :status")
+    Integer countCompletedDoses(@Param("userId") Long userId,
+                                @Param("vaccineId") Long vaccineId,
+                                @Param("status") StatusCustomerSchedule status);
+
+    /**
+     * Lấy ngày tiêm của mũi cuối cùng đã confirmed.
+     * Truyền enum qua @Param thay vì inline trong JPQL.
+     */
+    @Query("SELECT MAX(c.vaccineScheduleTime.injectDate) FROM CustomerSchedule c " +
+           "WHERE c.user.id = :userId " +
+           "AND c.vaccineScheduleTime.vaccineSchedule.vaccine.id = :vaccineId " +
+           "AND c.statusCustomerSchedule = :status")
+    java.sql.Date findLastInjectedDate(@Param("userId") Long userId,
+                                       @Param("vaccineId") Long vaccineId,
+                                       @Param("status") StatusCustomerSchedule status);
 }

@@ -34,6 +34,9 @@ function Header({ children }) {
           <a href="vaccine-inventory">
             <i className="fa fa-hospital-o"></i> Kho vaccine
           </a>
+          <a href="customer-schedule">
+            <i className="fa fa-list"></i> Danh sách Khách đăng ký
+          </a>
           <a href="customer-schedule-1">
             <i className="fa fa-calendar"></i> Lịch tiêm và Khách hàng
           </a>

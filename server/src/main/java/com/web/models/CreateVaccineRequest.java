@@ -31,4 +31,8 @@ public class CreateVaccineRequest {
     private Long ageGroupId;
 
     private String status;
+
+    private Integer maxDose;
+
+    private Integer minIntervalMonths;
 }

@@ -85,6 +85,9 @@ public class CustomerScheduleService {
     @Autowired
     private MailService mailService;
 
+    @Autowired
+    private VaccinePersonalizationService vaccinePersonalizationService;
+
     public CustomerSchedule create(CustomerSchedule customerSchedule, String orderId, String requestId) {
         LogUtils.init();
         if (paymentRepository.findByOrderIdAndRequestId(orderId, requestId).isPresent()) {
@@ -466,6 +469,17 @@ public class CustomerScheduleService {
 
     public CustomerSchedule save(CustomerSchedule customerSchedule, PayType payType, String orderId){
         VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository.findById(customerSchedule.getVaccineScheduleTime().getId()).get();
+
+        // --- Kiểm tra cá nhân hóa: số mũi và khoảng cách tối thiểu ---
+        Long vaccineId = vaccineScheduleTime.getVaccineSchedule().getVaccine().getId();
+        com.web.dto.VaccinePersonalizationResponse personalization =
+                vaccinePersonalizationService.checkPersonalization(vaccineId);
+        if (!personalization.isCanBook()) {
+            // Từ chối đặt lịch và trả về lý do cụ thể
+            throw new MessageException(personalization.getReason());
+        }
+
+        // --- Kiểm tra slot còn chỗ ---
         Long count = customerScheduleRepository.countBySchedule(vaccineScheduleTime.getId());
         if (count == null){
             count = 0L;

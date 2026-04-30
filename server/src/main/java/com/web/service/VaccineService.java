@@ -148,6 +148,8 @@ public class VaccineService {
         vaccine.setVaccineType(optionalVaccineType.get());
         vaccine.setManufacturer(optionalManufacturer.get());
         vaccine.setAgeGroup(optionalAgeGroup.get());
+        vaccine.setMaxDose(requestBody.getMaxDose());
+        vaccine.setMinIntervalMonths(requestBody.getMinIntervalMonths());
         vaccine.setInventory(vaccine.getInventory());
         vaccine.setCreatedDate(new Timestamp(System.currentTimeMillis()));
         vaccineRepository.save(vaccine);
@@ -194,6 +196,8 @@ public class VaccineService {
         vaccine.setImage(requestBody.getImage());
         vaccine.setDescription(requestBody.getDescription());
         vaccine.setStatus(requestBody.getStatus());
+        vaccine.setMaxDose(requestBody.getMaxDose());
+        vaccine.setMinIntervalMonths(requestBody.getMinIntervalMonths());
         vaccineRepository.save(vaccine);
 
         // Đồng bộ giá vaccine trong các lịch tiêm liên quan

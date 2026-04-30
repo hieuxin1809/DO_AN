@@ -22,6 +22,10 @@ function DangKyTiem() {
   const [selectedTime, setSelectedTime] = useState(null);
   const [selectedType, setSelectedType] = useState(null);
 
+  // State cá nhân hóa lịch tiêm
+  const [personalization, setPersonalization] = useState(null);
+  const [personalizationLoading, setPersonalizationLoading] = useState(false);
+
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     setCurrentDate(today);
@@ -38,16 +42,57 @@ function DangKyTiem() {
         setSelectedType(result.vaccineType)
         handleChonLoai(result.vaccineType)
         setCurrentVaccine(result)
+        // Tự động kiểm tra cá nhân hóa khi có vaccine từ URL
+        await checkPersonalization(result.id);
       }
     };
     fetchData();
   }, []);
+
+  /**
+   * Gọi API kiểm tra cá nhân hóa khi user chọn vaccine.
+   * Hiển thị cảnh báo nếu không đủ điều kiện tiêm.
+   */
+  const checkPersonalization = async (vaccineId) => {
+    // Chỉ kiểm tra nếu user đã đăng nhập (có token)
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setPersonalization(null);
+      return;
+    }
+    setPersonalizationLoading(true);
+    try {
+      const res = await getMethod(`/api/vaccine/customer/personalization/${vaccineId}`);
+      if (res.status === 200) {
+        const data = await res.json();
+        setPersonalization(data);
+      } else {
+        // Không phải customer hoặc chưa đăng nhập → bỏ qua
+        setPersonalization(null);
+      }
+    } catch (e) {
+      setPersonalization(null);
+    } finally {
+      setPersonalizationLoading(false);
+    }
+  };
 
   const handleChonLoai = async (option) => {
     setSelectedType(option)
     const response = await getMethod(`/api/vaccine/all/find-by-type?typeId=${option.id}`);
     setVacxin(await response.json());
     setVacxinChoose(null);
+  };
+
+  /**
+   * Khi user chọn vaccine → kiểm tra cá nhân hóa ngay lập tức
+   */
+  const handleChonVaccine = async (item) => {
+    setCurrentVaccine(item);
+    setPersonalization(null);
+    if (item) {
+      await checkPersonalization(item.id);
+    }
   };
 
   const setVacxinChoose = (item, index) => {
@@ -61,6 +106,13 @@ function DangKyTiem() {
       toast.warning("Hãy chọn vaccine");
       return;
     }
+
+    // Chặn đặt lịch ngay tại bước tìm kiếm nếu không đủ điều kiện
+    if (personalization && !personalization.canBook) {
+      toast.error(personalization.reason);
+      return;
+    }
+
     const response = await getMethod(`/api/vaccine-schedule/public/get-center?start=${start}&vaccineId=${currentVaccine.id}`);
     var result = await response.json()
     if (response.status == 417) {
@@ -128,6 +180,108 @@ function DangKyTiem() {
     }
   }
 
+  /**
+   * Render banner cá nhân hóa lịch tiêm.
+   * Hiển thị theo 3 trạng thái:
+   * - Loading: đang kiểm tra
+   * - canBook = false: cảnh báo đỏ với lý do
+   * - canBook = true: thông tin mũi tiếp theo + reminder nếu có
+   */
+  const renderPersonalizationBanner = () => {
+    if (!personalization && !personalizationLoading) return null;
+
+    // Đang tải
+    if (personalizationLoading) {
+      return (
+        <div style={{
+          margin: '10px 15px',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          backgroundColor: '#f0f4ff',
+          border: '1px solid #b3c6ff',
+          color: '#3355aa',
+          fontSize: '14px'
+        }}>
+          <i className="fa fa-spinner fa-spin" style={{ marginRight: '8px' }} />
+          Đang kiểm tra thông tin tiêm chủng của bạn...
+        </div>
+      );
+    }
+
+    if (!personalization) return null;
+
+    // ❌ Không thể đặt lịch
+    if (!personalization.canBook) {
+      return (
+        <div style={{
+          margin: '10px 15px',
+          padding: '14px 16px',
+          borderRadius: '8px',
+          backgroundColor: '#fff2f0',
+          border: '1px solid #ffccc7',
+          color: '#cf1322',
+          fontSize: '14px',
+          lineHeight: '1.6'
+        }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '6px' }}>
+            <i className="fa fa-ban" style={{ marginRight: '8px' }} />
+            Không thể đặt lịch tiêm
+          </div>
+          <div>{personalization.reason}</div>
+          {personalization.earliestNextDate && (
+            <div style={{ marginTop: '6px', color: '#8b0000' }}>
+              <i className="fa fa-calendar" style={{ marginRight: '6px' }} />
+              Ngày sớm nhất có thể tiêm mũi {personalization.nextDoseNumber}: <strong>{personalization.earliestNextDate}</strong>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ✅ Có thể đặt lịch
+    return (
+      <div>
+        {/* Thông tin mũi tiếp theo */}
+        <div style={{
+          margin: '10px 15px',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          backgroundColor: '#f6ffed',
+          border: '1px solid #b7eb8f',
+          color: '#389e0d',
+          fontSize: '14px'
+        }}>
+          <i className="fa fa-check-circle" style={{ marginRight: '8px' }} />
+          {personalization.completedDoses === 0
+            ? 'Bạn chưa tiêm mũi nào. Hãy đặt lịch tiêm mũi đầu tiên!'
+            : `Bạn đã tiêm ${personalization.completedDoses} mũi. Đề xuất tiêm mũi ${personalization.nextDoseNumber} tiếp theo.`
+          }
+          {personalization.maxDose && (
+            <span style={{ marginLeft: '8px', color: '#666', fontSize: '13px' }}>
+              ({personalization.completedDoses}/{personalization.maxDose} mũi)
+            </span>
+          )}
+        </div>
+
+        {/* Reminder: sắp đến ngày tiêm trong 7 ngày */}
+        {personalization.hasReminder && (
+          <div style={{
+            margin: '6px 15px 10px',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            backgroundColor: '#fffbe6',
+            border: '1px solid #ffe58f',
+            color: '#d46b08',
+            fontSize: '14px'
+          }}>
+            <i className="fa fa-bell" style={{ marginRight: '8px' }} />
+            {personalization.reminderMessage}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{ width: '100%' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -183,7 +337,7 @@ function DangKyTiem() {
                     options={vacxin}
                     getOptionLabel={(option) => option.name}
                     getOptionValue={(option) => option.id}
-                    onChange={setCurrentVaccine}
+                    onChange={handleChonVaccine}
                     value={currentVaccine}
                     id='vaccine'
                     placeholder="Tên vacxin"
@@ -201,6 +355,12 @@ function DangKyTiem() {
                     }}
                   />
                 </div>
+
+                {/* Banner cá nhân hóa: hiển thị ngay sau khi chọn vaccine */}
+                <div style={{ flex: '0 0 100%' }}>
+                  {renderPersonalizationBanner()}
+                </div>
+
                 <div style={{ flex: '0 0 100%', marginBottom: '15px' }}>
                   <span style={{ fontWeight: 'bold' }}>THỜI GIAN TIÊM</span>
                 </div>
@@ -307,7 +467,7 @@ function DangKyTiem() {
                           border: '1px solid #ccc',
                           height: '40px',
                           minHeight: 'unset',
-                          width: '300px', // Giới hạn chiều ngang
+                          width: '300px',
                         }),
                         valueContainer: (base) => ({
                           ...base,

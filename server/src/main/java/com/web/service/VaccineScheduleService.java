@@ -68,11 +68,6 @@ public class VaccineScheduleService {
         if(vaccineSchedule.getStartDate().before(new java.util.Date(System.currentTimeMillis()))){
             throw new MessageException("Ngày bắt đầu phải sau ngày hiện tại");
         }
-        Long range = vaccineSchedule.getEndDate().getTime() - vaccineSchedule.getStartDate().getTime();
-        Long numDay = range / (1000L * 60L * 60L * 24L);
-        if(numDay > 7){
-            throw new MessageException("Khoảng cách không được quá 7 ngày");
-        }
         vaccineSchedule.setCreatedDate(new Timestamp(System.currentTimeMillis()));
         vaccineSchedule.setUser(userUtils.getUserWithAuthority());
         vaccineScheduleRepository.save(vaccineSchedule);
@@ -157,11 +152,6 @@ public class VaccineScheduleService {
         }
         if(vaccineSchedule.getStartDate().before(new java.util.Date(System.currentTimeMillis()))){
             throw new MessageException("Ngày bắt đầu phải sau ngày hiện tại");
-        }
-        Long range = vaccineSchedule.getEndDate().getTime() - vaccineSchedule.getStartDate().getTime();
-        Long numDay = range / (1000L * 60L * 60L * 24L);
-        if(numDay > 7){
-            throw new MessageException("Khoảng cách không được quá 7 ngày");
         }
         Long num = vaccineScheduleTimeRepository.quantityBySchedule(vaccineSchedule.getId());
         if(num == null){

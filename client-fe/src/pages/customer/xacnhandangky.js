@@ -110,10 +110,7 @@ function XacNhanDangky() {
 
     async function requestPayMentVnpay(event) {
         event.preventDefault();
-        const hostname = window.location.hostname;
-        const port = window.location.port;
-        const protocol = window.location.protocol;
-        const urlmain = `${protocol}//${hostname}:${port}`;
+        const urlmain = window.location.origin;
         var returnurl = urlmain + '/thong-bao';
         var payload = getPayload(event);
         var paymentDto = {
@@ -135,10 +132,7 @@ function XacNhanDangky() {
 
     async function requestPayMentMomo(event) {
         event.preventDefault();
-        const hostname = window.location.hostname;
-        const port = window.location.port;
-        const protocol = window.location.protocol;
-        const urlmain = `${protocol}//${hostname}:${port}`;
+        const urlmain = window.location.origin;
         var returnurl = urlmain + '/thong-bao';
         var payload = getPayload(event);
         var paymentDto = {

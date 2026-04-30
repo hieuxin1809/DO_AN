@@ -172,10 +172,7 @@ function LichDaDangKy(){
 
     async function requestPayMent(event, type) {
         event.preventDefault();
-        const hostname = window.location.hostname;
-        const port = window.location.port;         
-        const protocol = window.location.protocol;
-        const urlmain = `${protocol}//${hostname}:${port}`;
+        const urlmain = window.location.origin;
         var returnurl = urlmain+'/thanh-cong';
         var paymentDto = {
             "content": "Thanh toán",

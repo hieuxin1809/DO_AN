@@ -1,5 +1,6 @@
 package com.web.api;
 
+import com.web.dto.VaccinePersonalizationResponse;
 import com.web.dto.VaccineTypeResponse;
 import com.web.entity.Center;
 import com.web.entity.Vaccine;
@@ -10,6 +11,7 @@ import com.web.models.ListVaccineRequest;
 import com.web.models.PlusVaccineRequest;
 import com.web.models.UpdateVaccineRequest;
 import com.web.service.CenterService;
+import com.web.service.VaccinePersonalizationService;
 import com.web.service.VaccineService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -29,6 +31,9 @@ public class VaccineApi {
 
     @Autowired
     private VaccineService vaccineService;
+
+    @Autowired
+    private VaccinePersonalizationService vaccinePersonalizationService;
 
     @GetMapping("/all/find-all")
     public ResponseEntity<?> getAll(){
@@ -85,6 +90,26 @@ public class VaccineApi {
     @GetMapping("/public/find-by-id")
     public ResponseEntity<?> findById(@RequestParam Long id){
         Vaccine result = vaccineService.findById(id);
+        return new ResponseEntity<>(result, HttpStatus.OK);
+    }
+
+    /**
+     * Kiểm tra điều kiện cá nhân hóa lịch tiêm cho user đang đăng nhập.
+     *
+     * Trả về:
+     * - canBook: có thể đặt lịch không
+     * - reason: lý do từ chối nếu không được đặt
+     * - nextDoseNumber: mũi tiếp theo được đề xuất
+     * - earliestNextDate: ngày sớm nhất có thể tiêm
+     * - hasReminder: sắp đến ngày tiêm trong 7 ngày tới không
+     *
+     * Path: /api/vaccine/customer/personalization/{vaccineId}
+     * Auth: yêu cầu ROLE_CUSTOMER
+     */
+    @GetMapping("/customer/personalization/{vaccineId}")
+    public ResponseEntity<?> checkPersonalization(@PathVariable Long vaccineId) {
+        VaccinePersonalizationResponse result =
+                vaccinePersonalizationService.checkPersonalization(vaccineId);
         return new ResponseEntity<>(result, HttpStatus.OK);
     }
 }

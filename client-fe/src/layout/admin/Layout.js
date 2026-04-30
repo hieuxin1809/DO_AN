@@ -42,6 +42,9 @@ function Header({ children }) {
                     <a href="nhan-vien">
                         <i className="fa fa-user-md"></i> Quản lý bác sỹ, y tá
                     </a>
+                    <a href="nhanvien">
+                        <i className="fa fa-calendar"></i> Lịch làm việc nhân viên
+                    </a>
                     <a href="#" onClick={() => logout()}>
                         <i className="fa fa-sign-out"></i> Đăng xuất
                     </a>

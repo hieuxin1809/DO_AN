@@ -83,8 +83,12 @@ const EmployeeSchedule = () => {
 
     const handleOpenModal = async (employee) => {
         setSelectedEmployee(employee);
-        const loadedSchedules = await loadSchedules(employee.id);
-        setSchedules(loadedSchedules);
+        if (employee) {
+            const loadedSchedules = await loadSchedules(employee.id);
+            setSchedules(loadedSchedules);
+        } else {
+            setSchedules([]);
+        }
         setIsModalOpen(true);
     };
 
@@ -212,6 +216,26 @@ const EmployeeSchedule = () => {
                 </div>
 
                 <form className="schedule-form" onSubmit={handleScheduleWork}>
+                    {!selectedEmployee && (
+                        <div className="form-group">
+                            <label>Chọn Nhân Viên</label>
+                            <select 
+                                onChange={(e) => {
+                                    const emp = employees.find(emp => emp.id === parseInt(e.target.value));
+                                    if (emp) {
+                                        setSelectedEmployee(emp);
+                                        loadSchedules(emp.id).then(setSchedules);
+                                    }
+                                }}
+                                required
+                            >
+                                <option value="">-- Chọn Nhân Viên --</option>
+                                {employees.map(emp => (
+                                    <option key={emp.id} value={emp.id}>{emp.fullname}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     <div className="form-group">
                         <label>Ngày Làm Việc</label>
                         <input 

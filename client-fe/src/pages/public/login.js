@@ -46,7 +46,7 @@ async function processLogin(user, token) {
         window.location.href = '/index';
     }
     if (user.authorities.name === "Doctor") {
-        
+        window.location.href = 'staff/customer-schedule-1';
     }
     if (user.authorities.name === "Nurse") {
         window.location.href = 'staff/vaccine';

@@ -87,6 +87,8 @@ const StaffAddVaccine = ()=>{
             "manufacturerId": manufacturerSelect.id,
             "ageGroupId": ageGroupSelect.id,
             "status": event.target.elements.status.value,
+            "maxDose": event.target.elements.maxDose.value ? parseInt(event.target.elements.maxDose.value) : null,
+            "minIntervalMonths": event.target.elements.minIntervalMonths.value ? parseInt(event.target.elements.minIntervalMonths.value) : null,
         }
         var res = null;
         if(id == null){
@@ -136,6 +138,13 @@ const StaffAddVaccine = ()=>{
                     <label class="lb-form">Ảnh</label>
                     <input onChange={onchangeFile} id='fileimage' type='file' class="form-control"/><br/>
                     <img id='imgpreview' src={item?.image} className='imgtable'/><br/>
+                    
+                    <label class="lb-form">Số mũi tối đa (để trống nếu không giới hạn)</label>
+                    <input defaultValue={item?.maxDose} name='maxDose' type="number" class="form-control" placeholder="Ví dụ: 2"/><br/>
+                    
+                    <label class="lb-form">Khoảng cách tiêm (tháng - để trống nếu không có)</label>
+                    <input defaultValue={item?.minIntervalMonths} name='minIntervalMonths' type="number" class="form-control" placeholder="Ví dụ: 2"/><br/>
+                    
                     <label class="lb-forms">Danh mục</label>
                     <Select
                         options={type}
