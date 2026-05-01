@@ -26,7 +26,6 @@ async function handleUpdateInfor(event) {
         district: event.target.elements.district.value,
         ward: event.target.elements.ward.value,
         street: event.target.elements.street.value,
-        insuranceStatus: document.getElementById("insurance").checked,
     };
     const res = await postMethodPayload('/api/customer-profile/customer/update-profile', payload);
     if (res.status == 417) {
@@ -43,10 +42,10 @@ async function handleUpdateInfor(event) {
 function CapNhatThongTin(){
     const [address, setAddress] = useState([]);
     const [huyen, setHuyen] = useState([]);
-    const [profile, setProfile] = useState(null);
+    const [profile, setProfile] = useState({});
+    const [isLoading, setIsLoading] = useState(true);
     const [tinh, setTinh] = useState(null);
     const [huyencs, setHuyenCs] = useState(null);
-    const [baohiem, setBaoHiem] = useState(false);
     
     useEffect(()=>{
         const getAddress= async() =>{
@@ -57,21 +56,17 @@ function CapNhatThongTin(){
         };
         const getCustomer= async() =>{
             const response = await getMethod('/api/customer-profile/customer/find-by-user')
-            var result = await response.json();
-            setProfile(result)
-            setTinh(result.city);
-            avatar = result.avatar;
-            setBaoHiem(result.insuranceStatus)
-
-            // const res = await fetch('https://provinces.open-api.vn/api/?depth=2', {
-            // });
-            // var province = await res.json();
-            // for(var i=0; i< province.length; i++){
-            //     if(province[i].name == result.city){
-            //         setHuyen(province[i].districts)
-            //     }
-            // }
-            // setHuyenCs(result.district);
+            if (response.status === 200) {
+                var text = await response.text();
+                if (text) {
+                    var result = JSON.parse(text);
+                    setProfile(result)
+                    setTinh(result.city);
+                    avatar = result.avatar;
+                    setHuyenCs(result.district);
+                }
+            }
+            setIsLoading(false);
         };
         getAddress();
         getCustomer();
@@ -98,31 +93,25 @@ function CapNhatThongTin(){
         }
     }
 
-    function changeBh(){
-        var value = document.getElementById("insurance").checked
-        setBaoHiem(value)
+    if (isLoading) {
+        return <div style={{textAlign: 'center', padding: '50px'}}>Đang tải dữ liệu...</div>;
     }
 
     return(
         <form onSubmit={handleUpdateInfor} class="row">
             <div className='col-sm-4'>
                 <label class="lbacc">Họ tên *</label>
-                <input name="fullname" defaultValue={profile!=null?profile.fullName:''} class="form-control" required/>
+                <input name="fullname" defaultValue={profile.fullName || ''} class="form-control" required/>
                 <label class="lbacc">Số điện thoại liên lạc *</label>
-                <input name="phone" defaultValue={profile!=null?profile.phone:''} class="form-control" required/>
+                <input name="phone" defaultValue={profile.phone || ''} class="form-control" required/>
                 <label class="lbacc">Giới tính *</label>
                 <select name="gender" class="form-control">
-                    <option value="Male" selected={profile==null?false:(profile.gender =='Male')}>Nam</option>
-                    <option value="Female" selected={profile==null?false:(profile.gender =='Female')}>Nữ</option>
-                    <option value="Other" selected={profile==null?false:(profile.gender =='Other')}>Khác</option>
+                    <option value="Male" selected={profile.gender =='Male'}>Nam</option>
+                    <option value="Female" selected={profile.gender =='Female'}>Nữ</option>
+                    <option value="Other" selected={profile.gender =='Other'}>Khác</option>
                 </select>
                 <label class="lbacc">Ngày sinh</label>
-                <input name="birthdate" defaultValue={profile!=null?profile.birthdate:''} type='date' class="form-control" required/>
-                <br/>
-                <label class="checkbox-custom">Đã có bảo hiểm 
-                    <input id='insurance' onChange={changeBh} type="checkbox" checked={baohiem}/>
-                    <span class="checkmark-checkbox"></span>
-                </label>
+                <input name="birthdate" defaultValue={profile.birthdate || ''} type='date' class="form-control" required/>
             </div>
             <div className='col-sm-4'>
                 <label class="lbacc">Tỉnh/ Thành phố</label>
@@ -145,9 +134,9 @@ function CapNhatThongTin(){
                     })}
                 </select>
                 <label class="lbacc">Phường/ xã</label>
-                <input name="ward" defaultValue={profile!=null?profile.ward:''} class="form-control" required/>
+                <input name="ward" defaultValue={profile.ward || ''} class="form-control" required/>
                 <label class="lbacc">tên đường, số nhà</label>
-                <input name="street" class="form-control"  defaultValue={profile!=null?profile.street:''}  required/>
+                <input name="street" class="form-control"  defaultValue={profile.street || ''}  required/>
                 <br/>
                 <div id="loading">
                     <div class="bar1 bar"></div>

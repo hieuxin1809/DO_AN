@@ -35,11 +35,18 @@ public class CustomerProfileService {
     public CustomerProfile update(CustomerProfile customerProfile){
         User user = userUtils.getUserWithAuthority();
         CustomerProfile ex = customerProfileRepository.findByUser(user.getId());
-        customerProfile.setId(ex.getId());
-        customerProfile.setCreatedDate(ex.getCreatedDate()==null?new Timestamp(System.currentTimeMillis()):ex.getCreatedDate());
-        customerProfile.setUser(user);
-        customerProfileRepository.save(customerProfile);
-        return customerProfile;
+        if (ex == null) {
+            customerProfile.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+            customerProfile.setUser(user);
+            customerProfileRepository.save(customerProfile);
+            return customerProfile;
+        } else {
+            customerProfile.setId(ex.getId());
+            customerProfile.setCreatedDate(ex.getCreatedDate()==null?new Timestamp(System.currentTimeMillis()):ex.getCreatedDate());
+            customerProfile.setUser(user);
+            customerProfileRepository.save(customerProfile);
+            return customerProfile;
+        }
     }
 
     public Page<CustomerProfileDTO> getCustomers(String q, Pageable pageable){
