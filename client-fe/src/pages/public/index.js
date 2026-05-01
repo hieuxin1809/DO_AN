@@ -12,7 +12,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
-import { Navigation, Pagination } from 'swiper/modules';
+import { Navigation, Pagination, Autoplay } from 'swiper/modules';
 import style from '../../layout/customer/styles/styleuser.scss'
 
 
@@ -20,6 +20,7 @@ var sizepro = 20
 function Home(){
     const [itemType, setItemType] = useState([]);
     const [itemNews, setItemNews] = useState([]);
+    const [doctors, setDoctors] = useState([]);
     const [visibleCounts, setVisibleCounts] = useState({}); // Lưu trạng thái hiển thị từng loại vaccine
 
     const handleShowMore = (index) => {
@@ -47,6 +48,13 @@ function Home(){
             setItemNews(result)
         };
         getItemNews();
+
+        const getDoctors = async() =>{
+            var response = await getMethod('/api/doctor/public/find-all');
+            var result = await response.json();
+            setDoctors(result)
+        };
+        getDoctors();
     }, []);
   
 
@@ -127,6 +135,50 @@ function Home(){
                         )}
                     </div>
                     ))}
+                    {doctors.length > 0 && (
+                        <div style={{ marginTop: "40px" }}>
+                            <h5 style={{ fontSize: "20px", fontWeight: "bold", color: "#333", marginBottom: "10px" }}>ĐỘI NGŨ BÁC SĨ</h5>
+                            <hr style={{ border: "1px solid #ddd", marginBottom: "20px" }} />
+                            <div style={{ position: "relative", paddingBottom: "20px" }}>
+                                <Swiper
+                                    modules={[Navigation, Pagination, Autoplay]}
+                                    spaceBetween={30}
+                                    slidesPerView={4}
+                                    breakpoints={{
+                                        320: { slidesPerView: 1, spaceBetween: 10 },
+                                        768: { slidesPerView: 2, spaceBetween: 20 },
+                                        1024: { slidesPerView: 4, spaceBetween: 30 },
+                                    }}
+                                    loop={true}
+                                    pagination={{ clickable: true }}
+                                    navigation={true}
+                                    autoplay={{
+                                        delay: 3000,
+                                        disableOnInteraction: false,
+                                    }}
+                                >
+                                    {doctors.map((item, index) => {
+                                        return (
+                                            <SwiperSlide key={index}>
+                                                <div style={{ padding: "20px", boxShadow: "0 4px 10px rgba(0, 0, 0, 0.1)", borderRadius: "10px", backgroundColor: "#fff", textAlign: "center", marginBottom: "40px" }}>
+                                                    <img
+                                                        src={item.avatar || 'https://via.placeholder.com/150'}
+                                                        alt={item.fullName}
+                                                        style={{ width: "120px", height: "120px", objectFit: "cover", borderRadius: "50%", margin: "0 auto 15px auto", border: "3px solid #007bff" }}
+                                                    />
+                                                    <h3 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "5px", color: "#007bff" }}>BS. {item.fullName}</h3>
+                                                    <p style={{ fontSize: "15px", color: "#555", fontWeight: "500", marginBottom: "5px" }}>{item.specialization}</p>
+                                                    <p style={{ fontSize: "14px", color: "#888", marginBottom: "10px" }}>Kinh nghiệm: {item.experienceYears} năm</p>
+                                                    <p style={{ fontSize: "13px", color: "#666", display: "-webkit-box", WebkitLineClamp: "3", WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: "60px" }}>{item.bio}</p>
+                                                </div>
+                                            </SwiperSlide>
+                                        );
+                                    })}
+                                </Swiper>
+                            </div>
+                        </div>
+                    )}
+
                     <div style={{ marginTop: "40px" }}>
                         <h5 style={{ fontSize: "20px", fontWeight: "bold", color: "#333", marginBottom: "10px" }}>TIN TỨC</h5>
                         <hr style={{ border: "1px solid #ddd", marginBottom: "20px" }} />
