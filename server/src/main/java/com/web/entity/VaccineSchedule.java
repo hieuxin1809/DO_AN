@@ -34,7 +34,6 @@ public class VaccineSchedule {
 
     private Timestamp createdDate;
 
-    private Long idPreSchedule;
 
     private BigDecimal price; // Thêm thuộc tính này nếu chưa có
 

@@ -33,6 +33,9 @@ function Header({ children }) {
                     <a href="danhmuc">
                         <i className="fa fa-list"></i> Danh mục
                     </a>
+                    <a href="center">
+                        <i className="fa fa-hospital-o"></i> Quản lý trung tâm
+                    </a>
                     <a href="lich-tiem-chung">
                         <i className="fa fa-calendar-check-o"></i> Lịch tiêm chủng
                     </a>

@@ -25,4 +25,28 @@ public class CenterApi {
         List<Center> result = centerService.findAll();
         return new ResponseEntity<>(result, HttpStatus.OK);
     }
+
+    @org.springframework.web.bind.annotation.PostMapping("/admin/create")
+    public ResponseEntity<?> create(@org.springframework.web.bind.annotation.RequestBody Center center){
+        Center result = centerService.save(center);
+        return new ResponseEntity<>(result, HttpStatus.CREATED);
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/admin/update")
+    public ResponseEntity<?> update(@org.springframework.web.bind.annotation.RequestBody Center center){
+        Center result = centerService.update(center);
+        return new ResponseEntity<>(result, HttpStatus.OK);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/admin/delete")
+    public ResponseEntity<?> delete(@org.springframework.web.bind.annotation.RequestParam("id") Long id){
+        centerService.delete(id);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @GetMapping("/admin/find-by-id")
+    public ResponseEntity<?> findById(@org.springframework.web.bind.annotation.RequestParam("id") Long id){
+        Center result = centerService.findById(id);
+        return new ResponseEntity<>(result, HttpStatus.OK);
+    }
 }

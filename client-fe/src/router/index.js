@@ -9,6 +9,8 @@ import lichTiemChungAdmin from "../pages/admin/lichtiemchung";
 import addLichTiemChungAdmin from "../pages/admin/addlichtiemchung";
 import AdminDanhMuc from "../pages/admin/danhmuc";
 import AdminAddDanhMuc from "../pages/admin/adddanhmuc";
+import CenterAdmin from "../pages/admin/center";
+import AddCenterAdmin from "../pages/admin/addcenter";
 
 //public
 import login from "../pages/public/login";
@@ -75,6 +77,8 @@ const adminRoutes = [
     { path: "/admin/nhanvien", component: nhanvienAdmin, layout: layoutAdmin },
     { path: "/admin/danhmuc", component: AdminDanhMuc, layout: layoutAdmin },
     { path: "/admin/adddanhmuc", component: AdminAddDanhMuc, layout: layoutAdmin },
+    { path: "/admin/center", component: CenterAdmin, layout: layoutAdmin },
+    { path: "/admin/add-center", component: AddCenterAdmin, layout: layoutAdmin },
     {
         path: "/admin/lich-tiem-chung",
         component: lichTiemChungAdmin,

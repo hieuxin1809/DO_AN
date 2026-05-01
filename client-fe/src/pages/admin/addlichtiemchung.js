@@ -16,12 +16,28 @@ async function addOrUpdateLichTiemChung(event) {
     event.preventDefault();
     var uls = new URL(document.URL)
     var id = uls.searchParams.get("id");
+    var startDateStr = event.target.elements.ngaybatdau.value;
+    var endDateStr = event.target.elements.ngayketthuc.value;
+
+    var start = new Date(startDateStr);
+    var end = new Date(endDateStr);
+    var diffTime = end.getTime() - start.getTime();
+    var diffDays = diffTime / (1000 * 3600 * 24);
+
+    if (diffDays < 0) {
+        toast.error("Ngày kết thúc không được nhỏ hơn ngày bắt đầu!");
+        return;
+    }
+    if (diffDays > 7) {
+        toast.error("Chỉ được phép thiết lập lịch tiêm chủng trong khoảng tối đa 7 ngày (để đảm bảo bảo quản vaccine)!");
+        return;
+    }
+
     var lichtiem = {
         "id": id,
-        "startDate": event.target.elements.ngaybatdau.value,
-        "endDate": event.target.elements.ngayketthuc.value,
+        "startDate": startDateStr,
+        "endDate": endDateStr,
         "limitPeople": event.target.elements.gioihan.value,
-        "idPreSchedule": event.target.elements.idPreSchedule.value,
         "description": event.target.elements.description.value,
         "center": {"id":event.target.elements.centerselect.value},
         "vaccine": {"id":event.target.elements.vacxinselect.value},
@@ -127,9 +143,6 @@ const AdminAddLichTiemChung = ()=>{
                     
                     <label className='lbadd-admin'>Số người giới hạn</label>
                     <input name='gioihan' defaultValue={item==null?'':item.limitPeople} type='number' className='form-control' required/>
-                    
-                    <label className='lbadd-admin'>Id lịch tiêm trước đó</label>
-                    <input name='idPreSchedule' defaultValue={item==null?'':item.idPreSchedule} type='number' className='form-control'/>
                     
                 </div>
                 <div className='col-sm-4'>

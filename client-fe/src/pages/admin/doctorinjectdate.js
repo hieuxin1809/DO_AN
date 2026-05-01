@@ -55,27 +55,49 @@ const AdminBacSiNgayTiem = ({lichtiem})=>{
         for(var i=0; i< selectedYTa.length; i++){
             listyt.push(selectedYTa[i].value)
         }
-        var payload = {
-            "vaccineScheduleId":lichtiem.id,
-            "injectDate":document.getElementById("ngaytiem").value,
-            "doctorId":listbs,
-            "nurseId":listyt,
+        var tungay = document.getElementById("tungaytiem").value;
+        var denngay = document.getElementById("denngaytiem").value;
+
+        var d1 = new Date(tungay);
+        var d2 = new Date(denngay);
+
+        if (d2 < d1) {
+            toast.error("Đến ngày không được nhỏ hơn từ ngày!");
+            return;
         }
-        console.log(payload);
+
+        var successCount = 0;
+        var failCount = 0;
+
+        for (var d = new Date(d1); d <= d2; d.setDate(d.getDate() + 1)) {
+            let year = d.getFullYear();
+            let month = String(d.getMonth() + 1).padStart(2, '0');
+            let day = String(d.getDate()).padStart(2, '0');
+            var dateStr = `${year}-${month}-${day}`;
+
+            var payload = {
+                "vaccineScheduleId":lichtiem.id,
+                "injectDate":dateStr,
+                "doctorId":listbs,
+                "nurseId":listyt,
+            }
+            
+            var res = await postMethodPayload('/api/vaccine-schedule-doctor/admin/create', payload)
+            if (res.status < 300) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+        }
+
+        if (successCount > 0) {
+            toast.success(`Tạo thành công cho ${successCount} ngày!`);
+        }
+        if (failCount > 0) {
+            toast.warning(`Thất bại ${failCount} ngày (có thể do đã tồn tại)`);
+        }
         
-        var res = await postMethodPayload('/api/vaccine-schedule-doctor/admin/create', payload)
-        if (res.status < 300) {
-            toast.success("Thành công");
-            getDoctorAndNurse();
-        } else {
-            if(res.status == 417){
-                var result = await res.json();
-                toast.warning(result.defaultMessage);
-            }
-            else{
-                toast.error("Thất bại");
-            }
-        }
+        getDoctorAndNurse();
     }
     
 
@@ -169,14 +191,26 @@ const AdminBacSiNgayTiem = ({lichtiem})=>{
                                 isSearchable={true} 
                             />
                         </div>
-                        <div className='col-sm-3'>
-                            <select className='form-control' id='ngaytiem'>
-                                {listNgay.map((item, index)=>{
-                                    return <option value={item}>{item}</option>
-                                })}
-                            </select>
+                        <div className='col-sm-4' style={{display: 'flex', gap: '5px'}}>
+                            <div style={{flex: 1}}>
+                                <label style={{fontSize: '12px', marginBottom: '2px'}}>Từ ngày</label>
+                                <select className='form-control' id='tungaytiem'>
+                                    {listNgay.map((item, index)=>{
+                                        return <option key={index} value={item}>{item}</option>
+                                    })}
+                                </select>
+                            </div>
+                            <div style={{flex: 1}}>
+                                <label style={{fontSize: '12px', marginBottom: '2px'}}>Đến ngày</label>
+                                <select className='form-control' id='denngaytiem'>
+                                    {listNgay.map((item, index)=>{
+                                        return <option key={index} value={item}>{item}</option>
+                                    })}
+                                </select>
+                            </div>
                         </div>
-                        <div className='col-sm-3'>
+                        <div className='col-sm-2'>
+                            <label style={{fontSize: '12px', marginBottom: '2px', visibility: 'hidden'}}>Tạo</label>
                             <button onClick={thembacsiyta} className='btn btn-primary form-control'>Tạo</button>
                         </div>
                     </div>

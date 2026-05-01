@@ -6,7 +6,8 @@ import './nhanvien.scss'; // CSS mới
 const EmployeeSchedule = () => {
     const [employees, setEmployees] = useState([]);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
-    const [workingDate, setWorkingDate] = useState('');
+    const [fromDate, setFromDate] = useState('');
+    const [toDate, setToDate] = useState('');
     const [workingTime, setWorkingTime] = useState('');
     const [schedules, setSchedules] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -95,33 +96,65 @@ const EmployeeSchedule = () => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setSelectedEmployee(null);
-        setWorkingDate('');
+        setFromDate('');
+        setToDate('');
         setWorkingTime('');
     };
 
     const handleScheduleWork = async (event) => {
         event.preventDefault();
-        if (!selectedEmployee || !workingDate || !workingTime) {
+        if (!selectedEmployee || !fromDate || !toDate || !workingTime) {
             toast.error("Vui lòng điền đầy đủ thông tin!");
             return;
         }
 
-        const payload = {
-            doctorId: selectedEmployee.id,
-            workingDate: workingDate,
-            workingTime: workingTime
-        };
+        const start = new Date(fromDate);
+        const end = new Date(toDate);
+        
+        if (end < start) {
+            toast.error("Đến ngày không được nhỏ hơn Từ ngày!");
+            return;
+        }
 
-        const res = await scheduleWork(payload);
-        if (res && res.ok) {
-            toast.success("Tạo lịch làm việc thành công!");
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = diffTime / (1000 * 3600 * 24);
+        if (diffDays > 60) {
+            toast.error("Chỉ được tạo lịch tối đa 60 ngày mỗi lần!");
+            return;
+        }
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            // YYYY-MM-DD format respecting local timezone to avoid offset issues
+            const offset = d.getTimezoneOffset()
+            const localDate = new Date(d.getTime() - (offset*60*1000))
+            const dateStr = localDate.toISOString().split('T')[0]
+            
+            const payload = {
+                doctorId: selectedEmployee.id,
+                workingDate: dateStr,
+                workingTime: workingTime
+            };
+            const res = await scheduleWork(payload);
+            if (res && res.ok) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+        }
+
+        if (successCount > 0) {
+            toast.success(`Đã tạo thành công ${successCount} ngày làm việc!`);
+            setFromDate('');
+            setToDate('');
+            setWorkingTime('');
             const loadedSchedules = await loadSchedules(selectedEmployee.id);
             setSchedules(loadedSchedules);
-            setWorkingDate('');
-            setWorkingTime('');
-        } else {
-            const errorData = await res.json();
-            toast.error(errorData.message || "Tạo lịch làm việc thất bại!");
+        }
+        if (failCount > 0) {
+            toast.warning(`Thất bại ${failCount} ngày (có thể do đã tồn tại lịch)`);
         }
     };
 
@@ -236,14 +269,25 @@ const EmployeeSchedule = () => {
                             </select>
                         </div>
                     )}
-                    <div className="form-group">
-                        <label>Ngày Làm Việc</label>
-                        <input 
-                            type="date" 
-                            value={workingDate}
-                            onChange={(e) => setWorkingDate(e.target.value)}
-                            required 
-                        />
+                    <div className="form-group" style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ flex: 1 }}>
+                            <label>Từ Ngày</label>
+                            <input 
+                                type="date" 
+                                value={fromDate}
+                                onChange={(e) => setFromDate(e.target.value)}
+                                required 
+                            />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <label>Đến Ngày</label>
+                            <input 
+                                type="date" 
+                                value={toDate}
+                                onChange={(e) => setToDate(e.target.value)}
+                                required 
+                            />
+                        </div>
                     </div>
                     <div className="form-group">
                         <label>Giờ Làm Việc</label>

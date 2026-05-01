@@ -74,27 +74,7 @@ public class VaccineScheduleService {
         vaccine.setInventory(vaccine.getInventory() - vaccineSchedule.getLimitPeople());
         vaccineRepository.save(vaccine);
 
-        if(vaccineSchedule.getIdPreSchedule() != null){
-            Optional<VaccineSchedule> vc = vaccineScheduleRepository.findById(vaccineSchedule.getIdPreSchedule());
-            int roundMonth = getRoundedMonthsBetween(vc.get().getStartDate(), vaccineSchedule.getStartDate());
-            System.out.println("Khoảng cách tháng: "+roundMonth);
-            if(vc.isPresent()){
-                List<Date> listDate = getDatesBetween(vaccineSchedule.getStartDate(), vaccineSchedule.getEndDate());
-                for(Date d : listDate){
-                    System.out.println("ngày: "+d.toString());
-                    List<CustomerSchedule> list = customerScheduleRepository.findByVaccineScheduleAndDate(vc.get().getId(), d, roundMonth);
-                    for(CustomerSchedule c : list){
-                        mailService.sendEmail(c.getUser().getEmail(),"Thông báo mũi tiêm tiếp theo",
-                                "Mũi tiêm "+c.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getName()+" đã có lịch tiêm tiếp theo<br>"+
-                                        "Thời gian tiêm mũi tiếp theo từ ngày: "+vaccineSchedule.getStartDate()+" đến ngày: "+vaccineSchedule.getEndDate()
-                                        +"<br>Mũi tiêm của bạn nên được tiêm vào ngày: "+d.toString()+
-                                        "<br>"+
-                                        vaccineSchedule.getDescription()
-                                , false, true);
-                    }
-                }
-            }
-        }
+
         return vaccineSchedule;
     }
 

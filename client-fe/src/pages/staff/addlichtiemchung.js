@@ -102,12 +102,28 @@ const AdminAddLichTiemChung = () => {
     event.preventDefault();
     const uls = new URL(document.URL);
     const id = uls.searchParams.get("id");
+    var startDateStr = event.target.elements.ngaybatdau.value;
+    var endDateStr = event.target.elements.ngayketthuc.value;
+
+    var start = new Date(startDateStr);
+    var end = new Date(endDateStr);
+    var diffTime = end.getTime() - start.getTime();
+    var diffDays = diffTime / (1000 * 3600 * 24);
+
+    if (diffDays < 0) {
+        toast.error("Ngày kết thúc không được nhỏ hơn ngày bắt đầu!");
+        return;
+    }
+    if (diffDays > 7) {
+        toast.error("Chỉ được phép thiết lập lịch tiêm chủng trong khoảng tối đa 7 ngày (để đảm bảo bảo quản vaccine)!");
+        return;
+    }
+
     const lichtiem = {
       id: id,
-      startDate: event.target.elements.ngaybatdau.value,
-      endDate: event.target.elements.ngayketthuc.value,
+      startDate: startDateStr,
+      endDate: endDateStr,
       limitPeople: event.target.elements.gioihan.value,
-      idPreSchedule: event.target.elements.idPreSchedule.value,
       description: event.target.elements.description.value,
       center: { id: event.target.elements.centerselect.value },
       vaccine: { id: event.target.elements.vacxinselect.value },
