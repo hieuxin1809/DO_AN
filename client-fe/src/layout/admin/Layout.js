@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 
 function Header({ children }) {
     const [isCssLoaded, setCssLoaded] = useState(false);
+    const [showDropdown, setShowDropdown] = useState(false);
 
     useEffect(() => {
         import('../admin/layout.scss').then(() => setCssLoaded(true));
@@ -48,9 +49,6 @@ function Header({ children }) {
                     <a href="nhanvien">
                         <i className="fa fa-calendar"></i> Lịch làm việc nhân viên
                     </a>
-                    <a href="#" onClick={() => logout()}>
-                        <i className="fa fa-sign-out"></i> Đăng xuất
-                    </a>
                 </div>
             </div>
 
@@ -58,25 +56,24 @@ function Header({ children }) {
             <div className="header">
                 <div className="header-left"></div>
                 <div className="header-right">
-                    <div className="profile">
+                    <div className="profile" style={{position: 'relative'}}>
                         <a
-                            className="nav-link dropdown-toggle menucha"
+                            className="nav-link d-flex align-items-center"
                             href="#"
-                            id="navbarDropdown"
-                            role="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false"
+                            onClick={(e) => { e.preventDefault(); setShowDropdown(!showDropdown); }}
+                            style={{cursor: 'pointer'}}
                         >
-                            <span className="tendangnhap">Admin</span>
-                            <img src={avatar} className="userlogo-admin" alt="Avatar" />
+                            <span className="tendangnhap" style={{marginRight: '10px'}}>Admin</span>
+                            <img src={avatar} className="userlogo-admin" alt="Avatar" style={{marginRight: '10px'}} />
+                            <i className="fa fa-caret-down" style={{fontSize: '16px', color: '#555'}}></i>
                         </a>
-                        <ul className="dropdown-menu listitemtk" aria-labelledby="navbarDropdown">
-                            <li>
-                                <a className="dropdown-item" onClick={() => logout()} href="#">
-                                    <i className="fa fa-sign-out"></i> Đăng xuất
+                        {showDropdown && (
+                            <div className="dropdown-menu show" style={{display: 'block', position: 'absolute', right: 0, top: '100%', minWidth: '150px', backgroundColor: '#fff', boxShadow: '0 4px 8px rgba(0,0,0,0.1)', border: '1px solid #ddd', borderRadius: '4px', zIndex: 1000}}>
+                                <a className="dropdown-item" href="#" onClick={(e) => { e.preventDefault(); logout(); }} style={{padding: '10px 15px', color: '#d9534f', display: 'flex', alignItems: 'center'}}>
+                                    <i className="fa fa-sign-out" style={{marginRight: '8px', fontSize: '16px'}}></i> Đăng xuất
                                 </a>
-                            </li>
-                        </ul>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
