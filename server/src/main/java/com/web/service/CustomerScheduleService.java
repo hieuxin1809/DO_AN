@@ -26,6 +26,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -157,7 +158,7 @@ public class CustomerScheduleService {
             throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Đã có lỗi");
         }
 
-        Pageable pageable = PageRequest.of(request.getPage() - 1, request.getLimit());
+        Pageable pageable = PageRequest.of(request.getPage() - 1, request.getLimit(), Sort.by(Sort.Direction.DESC, "createdDate"));
         Page<CustomerSchedule> customerSchedulePage = customerScheduleRepository.findAll(specificationCustomerScheduleList(request), pageable);
 
         List<ListCustomerScheduleResponse> list = customerSchedulePage.stream().map(e ->
@@ -240,7 +241,13 @@ public class CustomerScheduleService {
             userRepository.save(user);
         }
 
-        VaccineScheduleTime vaccineScheduleTime = findAvailableVaccineScheduleTime(request.getVaccineScheduleId());
+        VaccineScheduleTime vaccineScheduleTime;
+        if (request.getVaccineScheduleTimeId() != null) {
+            vaccineScheduleTime = vaccineScheduleTimeRepository.findById(request.getVaccineScheduleTimeId())
+                    .orElseThrow(() -> new MessageException(HttpStatus.BAD_REQUEST.value(), "Giờ tiêm không tồn tại"));
+        } else {
+            vaccineScheduleTime = findAvailableVaccineScheduleTime(request.getVaccineScheduleId());
+        }
 
         CustomerSchedule customerSchedule = CustomerSchedule.builder()
                 .statusCustomerSchedule(StatusCustomerSchedule.pending)

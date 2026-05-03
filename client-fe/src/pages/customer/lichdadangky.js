@@ -258,17 +258,24 @@ function LichDaDangKy(){
                                 <td>{item.createdDate.split(".")[0]}</td>
                                 <td>{item.vaccineScheduleTime.start} - {item.vaccineScheduleTime.end}<br/>Ngày tiêm: {item.vaccineScheduleTime.injectDate}</td>
                                 <td>{item.customerSchedulePay == 'CHUA_THANH_TOAN'?'Chưa thanh toán':'Đã thanh toán'}</td>
-                                <td>{item.statusCustomerSchedule}</td>
+                                <td>{{
+                                    'pending': 'Chờ duyệt',
+                                    'confirmed': 'Đã duyệt',
+                                    'cancelled': 'Đã hủy',
+                                    'injected': 'Đã tiêm',
+                                    'finished': 'Hoàn thành',
+                                    'not_injected': 'Chưa tiêm',
+                                }[item.statusCustomerSchedule] || item.statusCustomerSchedule}</td>
                                 <td>
-                                    {
-                                    item.customerSchedulePay == 'CHUA_THANH_TOAN'?
-                                    <button onClick={()=>setItem(item)} data-bs-toggle="modal" data-bs-target="#modelthanhtoan" className='btn btn-primary btncommont'>Thanh toán</button>:
+                                    {item.customerSchedulePay == 'CHUA_THANH_TOAN' ?
+                                    <button onClick={()=>setItem(item)} data-bs-toggle="modal" data-bs-target="#modelthanhtoan" className='btn btn-primary btncommont'>Thanh toán</button>
+                                    : item.statusCustomerSchedule === 'confirmed' && !checked ?
                                     <button onClick={()=>setItem(item)} data-bs-toggle="modal" data-bs-target="#modeldoilich" className='btn btn-primary btncommont'>Đổi lịch</button>
-                                    }
+                                    : <></>}
                                 </td>
                                 <td>
                                     {
-                                    item.statusCustomerSchedule == 'confirmed'?
+                                    item.statusCustomerSchedule == 'injected'?
                                     <button onClick={()=>setSchedule(item)} data-bs-toggle="modal" data-bs-target="#exampleModal" className='btn btn-primary btncommont'>Gửi</button>:<></>
                                     }
                                 </td>

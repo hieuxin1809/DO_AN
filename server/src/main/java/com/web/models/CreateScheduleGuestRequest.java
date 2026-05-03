@@ -11,6 +11,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class CreateScheduleGuestRequest {
     private Long vaccineScheduleId;
+    private Long vaccineScheduleTimeId;
     private String email;
     private String phone;
     private String fullName;

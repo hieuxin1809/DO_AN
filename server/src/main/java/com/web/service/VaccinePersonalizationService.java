@@ -69,7 +69,7 @@ public class VaccinePersonalizationService {
         // --- 3. Đếm số mũi đã tiêm thành công ---
         // Truyền enum StatusCustomerSchedule.confirmed qua @Param để tránh InvalidPathException
         Integer completedDoses = customerScheduleRepository.countCompletedDoses(
-                user.getId(), vaccineId, StatusCustomerSchedule.confirmed);
+                user.getId(), vaccineId, StatusCustomerSchedule.injected);
         if (completedDoses == null) {
             completedDoses = 0;
         }
