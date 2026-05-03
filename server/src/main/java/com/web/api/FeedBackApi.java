@@ -35,4 +35,10 @@ public class FeedBackApi {
     public void delete(@RequestParam("id") Long id){
         feedBackService.delete(id);
     }
+
+    @GetMapping("/admin/all")
+    public ResponseEntity<?> getAllForAdmin(){
+        List<Feedback> result = feedBackService.findAll();
+        return new ResponseEntity<>(result, HttpStatus.OK);
+    }
 }

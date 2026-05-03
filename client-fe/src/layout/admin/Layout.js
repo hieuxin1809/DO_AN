@@ -49,6 +49,9 @@ function Header({ children }) {
                     <a href="nhanvien">
                         <i className="fa fa-calendar"></i> Lịch làm việc nhân viên
                     </a>
+                    <a href="phan-hoi">
+                        <i className="fa fa-comments"></i> Phản hồi khách hàng
+                    </a>
                 </div>
             </div>
 

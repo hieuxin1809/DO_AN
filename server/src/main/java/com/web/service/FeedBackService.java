@@ -29,6 +29,10 @@ public class FeedBackService {
         return feedbackRepository.findByUser(user.getId());
     }
 
+    public List<Feedback> findAll(){
+        return feedbackRepository.findAllByOrderByCreatedDateDesc();
+    }
+
     public Feedback create(Feedback feedback){
         feedback.setCreatedDate(new Timestamp(System.currentTimeMillis()));
         if(feedback.getDoctor() == null && feedback.getNurse() == null){

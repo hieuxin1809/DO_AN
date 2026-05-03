@@ -19,6 +19,7 @@ import signin from '../pages/public/signin';
 import nhanvienAdmin from "../pages/admin/nhanvien";
 import khachHangAdmin from "../pages/admin/khachhang";
 import employeeAdmin from "../pages/admin/employee";
+import AdminPhanHoi from "../pages/admin/phanHoi";
 import index from "../pages/public/index";
 import TraCuuLichTiem from "../pages/public/tracuulichtiem";
 import LichTiemDaQua from "../pages/public/lichtiemdaqua";
@@ -97,6 +98,11 @@ const adminRoutes = [
     {
         path: "/admin/nhan-vien",
         component: employeeAdmin,
+        layout: layoutAdmin,
+    },
+    {
+        path: "/admin/phan-hoi",
+        component: AdminPhanHoi,
         layout: layoutAdmin,
     },
 ];
