@@ -177,7 +177,7 @@ const AdminUser = () => {
             <div className="row">
                 <div className="col-md-3 col-sm-6 col-6">
                     <button data-bs-toggle="modal" data-bs-target="#addtk" className="btn btn-primary">
-                        <i className="fa fa-plus"></i> Thêm admin
+                        <i className="fa fa-plus"></i> Thêm tài khoản mới
                     </button>
                 </div>
             </div>

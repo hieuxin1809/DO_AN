@@ -31,9 +31,9 @@ const AdminKhachHang = () => {
     const getKhachHang = async () => {
       var response = await getMethod(
         "/api/customer-profile/admin/list-customer?page=0&size=" +
-          size +
-          "&sort=id,asc" +
-          (searchTerm ? "&q=" + searchTerm : ""),
+        size +
+        "&sort=id,asc" +
+        (searchTerm ? "&q=" + searchTerm : ""),
       );
       var result = await response.json();
       setItems(result.content);

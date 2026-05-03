@@ -17,7 +17,7 @@ import java.util.Map;
 @Service
 public class GeminiService {
 
-    private final String API_KEY = "AIzaSyBFhsax7bKLBsOccd_6ZofWcsI4uPQSTBM";
+    private final String API_KEY = "AIzaSyDRMhuhPl0WBhoUx11BQHfj9T-l-kGrxc4";
     private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + API_KEY;
 
     public String chatWithAI(String userMessage) {

@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import {toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import Swal from 'sweetalert2'
 import 'react-toastify/dist/ReactToastify.css';
-import {getMethod, postMethodPayload} from '../../services/request';
+import { getMethod, postMethodPayload } from '../../services/request';
 
 async function saveCenter(event) {
     event.preventDefault();
     var uls = new URL(document.URL)
     var id = uls.searchParams.get("id");
     
+    // Vì ta đặt name='city', name='district', name='ward' cho thẻ select
+    // nên event.target.elements vẫn lấy được value bình thường
     var payload = {
         "id": id,
         "centerName": event.target.elements.centerName.value,
@@ -44,21 +46,74 @@ async function saveCenter(event) {
     }
 }
 
-const AddCenterAdmin = ()=>{
+const AddCenterAdmin = () => {
     const [item, setItem] = useState(null);
 
-    useEffect(()=>{
-        const getCenter = async() =>{
+    // Thêm state để quản lý dữ liệu địa chỉ
+    const [provinces, setProvinces] = useState([]);
+    const [districts, setDistricts] = useState([]);
+    const [wards, setWards] = useState([]);
+
+    // State lưu giá trị đang chọn
+    const [selectedCity, setSelectedCity] = useState('');
+    const [selectedDistrict, setSelectedDistrict] = useState('');
+    const [selectedWard, setSelectedWard] = useState('');
+
+    // Fetch dữ liệu từ API hành chính Việt Nam và Center đang edit
+    useEffect(() => {
+        const getCenter = async () => {
             var uls = new URL(document.URL)
             var id = uls.searchParams.get("id");
-            if(id != null){
+            if (id != null) {
                 var response = await getMethod('/api/center/admin/find-by-id?id=' + id);
                 var result = await response.json();
-                setItem(result)
+                setItem(result);
             }
         };
         getCenter();
+
+        fetch('https://provinces.open-api.vn/api/?depth=3')
+            .then(res => res.json())
+            .then(data => setProvinces(data))
+            .catch(err => console.error("Lỗi lấy API tỉnh thành: ", err));
     }, []);
+
+    // Effect này chạy để gán lại giá trị cho các thẻ select khi đang ở chế độ Sửa (Edit)
+    useEffect(() => {
+        if (item && provinces.length > 0) {
+            setSelectedCity(item.city);
+            const province = provinces.find(p => p.name === item.city);
+            if (province) {
+                setDistricts(province.districts);
+                setSelectedDistrict(item.district);
+                const dist = province.districts.find(d => d.name === item.district);
+                if (dist) {
+                    setWards(dist.wards);
+                    setSelectedWard(item.ward);
+                }
+            }
+        }
+    }, [item, provinces]);
+
+    // Xử lý khi chọn Tỉnh/Thành
+    const handleCityChange = (e) => {
+        const cityName = e.target.value;
+        setSelectedCity(cityName);
+        const province = provinces.find(p => p.name === cityName);
+        setDistricts(province ? province.districts : []);
+        setWards([]); // Reset Phường/Xã
+        setSelectedDistrict('');
+        setSelectedWard('');
+    };
+
+    // Xử lý khi chọn Quận/Huyện
+    const handleDistrictChange = (e) => {
+        const distName = e.target.value;
+        setSelectedDistrict(distName);
+        const dist = districts.find(d => d.name === distName);
+        setWards(dist ? dist.wards : []);
+        setSelectedWard('');
+    };
 
     return (
         <>
@@ -72,21 +127,36 @@ const AddCenterAdmin = ()=>{
             <form className='row' onSubmit={saveCenter} method='post'>
                 <div className='col-sm-6'>
                     <label className='lbadd-admin'>Tên trung tâm</label>
-                    <input name='centerName' defaultValue={item?.centerName} type='text' className='form-control' required/>
-                    
+                    <input name='centerName' defaultValue={item?.centerName} type='text' className='form-control' required />
+
                     <label className='lbadd-admin'>Thành phố / Tỉnh</label>
-                    <input name='city' defaultValue={item?.city} type='text' className='form-control' required/>
+                    <select name='city' value={selectedCity} onChange={handleCityChange} className='form-control' required>
+                        <option value="">-- Chọn Tỉnh/Thành phố --</option>
+                        {provinces.map(p => (
+                            <option key={p.code} value={p.name}>{p.name}</option>
+                        ))}
+                    </select>
 
                     <label className='lbadd-admin'>Quận / Huyện</label>
-                    <input name='district' defaultValue={item?.district} type='text' className='form-control' required/>
-                    
+                    <select name='district' value={selectedDistrict} onChange={handleDistrictChange} className='form-control' required disabled={!selectedCity}>
+                        <option value="">-- Chọn Quận/Huyện --</option>
+                        {districts.map(d => (
+                            <option key={d.code} value={d.name}>{d.name}</option>
+                        ))}
+                    </select>
+
                     <label className='lbadd-admin'>Phường / Xã</label>
-                    <input name='ward' defaultValue={item?.ward} type='text' className='form-control' required/>
+                    <select name='ward' value={selectedWard} onChange={(e) => setSelectedWard(e.target.value)} className='form-control' required disabled={!selectedDistrict}>
+                        <option value="">-- Chọn Phường/Xã --</option>
+                        {wards.map(w => (
+                            <option key={w.code} value={w.name}>{w.name}</option>
+                        ))}
+                    </select>
 
                     <label className='lbadd-admin'>Số nhà, Tên đường</label>
-                    <input name='street' defaultValue={item?.street} type='text' className='form-control' required/>
-                    
-                    <button className='btn btn-primary form-control' style={{marginTop: '20px'}}>
+                    <input name='street' defaultValue={item?.street} type='text' className='form-control' required />
+
+                    <button className='btn btn-primary form-control' style={{ marginTop: '20px' }}>
                         {item == null ? 'Thêm trung tâm' : 'Cập nhật trung tâm'}
                     </button>
                 </div>
