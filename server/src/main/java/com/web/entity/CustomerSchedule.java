@@ -55,6 +55,9 @@ public class CustomerSchedule {
     @Enumerated(EnumType.STRING)
     private StatusCustomerSchedule statusCustomerSchedule;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "GMT+7")
+    private Timestamp completedDate;
+
     @ManyToOne
     @JoinColumn(name = "account_id")
     private User user;
@@ -63,5 +66,12 @@ public class CustomerSchedule {
     @JoinColumn(name = "vaccine_schedule_time_id")
     private VaccineScheduleTime vaccineScheduleTime;
 
+    @ManyToOne
+    @JoinColumn(name = "doctor_id")
+    private Doctor doctor;
+
+    @ManyToOne
+    @JoinColumn(name = "nurse_id")
+    private Nurse nurse;
 
 }

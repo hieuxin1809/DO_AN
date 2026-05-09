@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface NurseRepository extends JpaRepository<Nurse, Long> {
     @Query("SELECT n FROM Nurse n " +
@@ -15,4 +16,8 @@ public interface NurseRepository extends JpaRepository<Nurse, Long> {
             "OR LOWER(n.user.phoneNumber) LIKE LOWER(CONCAT('%', :q, '%')) " +
             "OR LOWER(n.user.email) LIKE LOWER(CONCAT('%', :q, '%')))")
     public Page<Nurse> getNurse(@Param("q") String q, Pageable pageable);
+
+    Optional<Nurse> findByUser_Id(Long userId);
+
+    List<Nurse> findAll();
 }

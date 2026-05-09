@@ -68,4 +68,8 @@ public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedu
     java.sql.Date findLastInjectedDate(@Param("userId") Long userId,
                                        @Param("vaccineId") Long vaccineId,
                                        @Param("status") StatusCustomerSchedule status);
+
+    Page<CustomerSchedule> findByDoctor_Id(Long doctorId, Pageable pageable);
+
+    Page<CustomerSchedule> findByNurse_Id(Long nurseId, Pageable pageable);
 }

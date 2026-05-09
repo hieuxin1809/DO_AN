@@ -16,6 +16,7 @@ import com.web.repository.AuthorityRepository;
 import com.web.repository.CustomerProfileRepository;
 import com.web.repository.UserRepository;
 import com.web.utils.Contains;
+import com.web.utils.EmailTemplateUtils;
 import com.web.utils.MailService;
 import com.web.utils.UserUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -147,9 +148,8 @@ public class UserService {
         user.setCreatedDate(new Date(System.currentTimeMillis()));
         user.setActivationKey(userUtils.randomKey());
         User result = userRepository.save(user);
-        mailService.sendEmail(user.getEmail(), "Xác nhận tài khoản của bạn", "Cảm ơn bạn đã tin tưởng và xử dụng dịch vụ của chúng tôi:<br>" +
-                "Để kích hoạt tài khoản của bạn, hãy nhập mã xác nhận bên dưới để xác thực tài khoản của bạn<br><br>" +
-                "<a style=\"background-color: #2f5fad; padding: 10px; color: #fff; font-size: 18px; font-weight: bold;\">" + user.getActivationKey() + "</a>", false, true);
+        String _htmlActivate1 = EmailTemplateUtils.accountActivation(user.getEmail(), user.getActivationKey());
+        mailService.sendEmail(user.getEmail(), "[iVaccine] Xác nhận tài khoản của bạn", _htmlActivate1, false, true);
         CustomerProfile customerProfile = new CustomerProfile();
         customerProfile.setUser(result);
         customerProfileRepository.save(customerProfile);
@@ -179,11 +179,8 @@ public class UserService {
         User result = userRepository.save(user);
 
         // Gửi email kích hoạt tài khoản
-        mailService.sendEmail(user.getEmail(), "Xác nhận tài khoản của bạn",
-                "Cảm ơn bạn đã tin tưởng và sử dụng dịch vụ của chúng tôi:<br>" +
-                        "Để kích hoạt tài khoản của bạn, hãy nhập mã xác nhận bên dưới để xác thực tài khoản của bạn<br><br>" +
-                        "<a style=\"background-color: #2f5fad; padding: 10px; color: #fff; font-size: 18px; font-weight: bold;\">" +
-                        user.getActivationKey() + "</a>", false, true);
+        String _htmlActivate2 = EmailTemplateUtils.accountActivation(user.getEmail(), user.getActivationKey());
+        mailService.sendEmail(user.getEmail(), "[iVaccine] Xác nhận tài khoản của bạn", _htmlActivate2, false, true);
 
         return result;
     }
@@ -234,10 +231,8 @@ public class UserService {
         user.get().setRememberKey(random);
         userRepository.save(user.get());
 
-        mailService.sendEmail(email, "Đặt lại mật khẩu", "Cảm ơn bạn đã tin tưởng và xử dụng dịch vụ của chúng tôi:<br>" +
-                "Chúng tôi đã tạo một mật khẩu mới từ yêu cầu của bạn<br>" +
-                "Hãy lick vào bên dưới để đặt lại mật khẩu mới của bạn<br><br>" +
-                "<a href='" + url + "?email=" + email + "&key=" + random + "' style=\"background-color: #2f5fad; padding: 10px; color: #fff; font-size: 18px; font-weight: bold;\">Đặt lại mật khẩu</a>", false, true);
+        String _htmlReset = EmailTemplateUtils.passwordReset(email, url + "?email=" + email + "&key=" + random);
+        mailService.sendEmail(email, "[iVaccine] Đặt lại mật khẩu", _htmlReset, false, true);
 
     }
 

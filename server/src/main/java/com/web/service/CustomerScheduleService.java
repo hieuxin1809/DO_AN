@@ -9,6 +9,7 @@ import com.web.entity.*;
 import com.web.exception.MessageException;
 import com.web.models.ApproveCustomerScheduleRequest;
 import com.web.models.ApproveCustomerScheduleResponse;
+import com.web.models.AssignDoctorNurseRequest;
 import com.web.models.CreateScheduleGuestRequest;
 import com.web.models.CreateScheduleGuestResponse;
 import com.web.models.ListCustomerScheduleRequest;
@@ -16,6 +17,8 @@ import com.web.models.ListCustomerScheduleResponse;
 import com.web.models.QueryStatusTransactionResponse;
 import com.web.processor.QueryTransactionStatus;
 import com.web.repository.*;
+import com.web.service.VaccinePersonalizationService;
+import com.web.utils.EmailTemplateUtils;
 import com.web.utils.MailService;
 import com.web.utils.UserUtils;
 import com.web.vnpay.VNPayService;
@@ -88,6 +91,12 @@ public class CustomerScheduleService {
 
     @Autowired
     private VaccinePersonalizationService vaccinePersonalizationService;
+
+    @Autowired
+    private DoctorRepository doctorRepository;
+
+    @Autowired
+    private NurseRepository nurseRepository;
 
     public CustomerSchedule create(CustomerSchedule customerSchedule, String orderId, String requestId) {
         LogUtils.init();
@@ -179,6 +188,9 @@ public class CustomerScheduleService {
                                             e.getCustomerSchedulePay() == CustomerSchedulePay.THANH_TOAN_VNPAY))
                             .healthStatusAfter(e.getHealthStatusAfter())
                             .healthStatusBefore(e.getHealthStatusBefore())
+                            .completedDate(e.getCompletedDate())
+                            .doctor(e.getDoctor())
+                            .nurse(e.getNurse())
                             .build();
                 }
         ).toList();
@@ -288,44 +300,47 @@ public class CustomerScheduleService {
             throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Lịch tiêm của khách không tồn tại");
         }
         CustomerSchedule customerSchedule = optionalVaccineSchedule.get();
-        customerSchedule.setStatusCustomerSchedule(request.getStatus().equals("confirmed") ? StatusCustomerSchedule.confirmed : StatusCustomerSchedule.cancelled);
+        StatusCustomerSchedule newStatus;
+        switch (request.getStatus()) {
+            case "confirmed":     newStatus = StatusCustomerSchedule.confirmed;     break;
+            case "cancelled":     newStatus = StatusCustomerSchedule.cancelled;     break;
+            case "injected":      newStatus = StatusCustomerSchedule.injected;      break;
+            case "finished":      newStatus = StatusCustomerSchedule.finished;      break;
+            case "not_injected":  newStatus = StatusCustomerSchedule.not_injected;  break;
+            default: throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Trang thai khong hop le: " + request.getStatus());
+        }
+        customerSchedule.setStatusCustomerSchedule(newStatus);
+        if (newStatus == StatusCustomerSchedule.injected
+                || newStatus == StatusCustomerSchedule.cancelled
+                || newStatus == StatusCustomerSchedule.finished
+                || newStatus == StatusCustomerSchedule.not_injected) {
+            customerSchedule.setCompletedDate(new Timestamp(System.currentTimeMillis()));
+        }
         customerScheduleRepository.save(customerSchedule);
         sendEmailToCustomer(customerSchedule);
         return ApproveCustomerScheduleResponse.builder().status(request.getStatus()).build();
     }
 
+
     private void sendEmailToCustomer(CustomerSchedule customerSchedule) {
-        // Thông tin email
         String to = customerSchedule.getUser().getEmail();
-        String subject = "Thông báo về lịch tiêm";
-        String body = "Lịch tiêm của bạn đã được "
-                + (customerSchedule.getStatusCustomerSchedule() == StatusCustomerSchedule.confirmed ? "xác nhận"
-                : (customerSchedule.getStatusCustomerSchedule() == StatusCustomerSchedule.pending ? "tạo" : "hủy")) + ".";
-
-        // Thiết lập gửi email
-        Properties properties = new Properties();
-        properties.put("mail.smtp.auth", "true");
-        properties.put("mail.smtp.starttls.enable", "true");
-        properties.put("mail.smtp.host", "smtp.gmail.com"); // Địa chỉ máy chủ SMTP
-        properties.put("mail.smtp.port", "587"); // Cổng máy chủ SMTP
-
-        Session session = Session.getInstance(properties, new javax.mail.Authenticator() {
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication("hoangxuanhieu0301@gmail.com", "fthd ouyj cxms tbbm"); // Thay đổi thông tin xác thực
-            }
-        });
-
-        try {
-            Message message = new MimeMessage(session);
-            message.setFrom(new InternetAddress("hoangxuanhieu0301@gmail.com"));
-            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
-            message.setSubject(subject);
-            message.setText(body);
-
-            Transport.send(message);
-        } catch (MessagingException e) {
-            throw new RuntimeException(e);
+        String status = customerSchedule.getStatusCustomerSchedule().name();
+        String vaccineName = customerSchedule.getVaccineScheduleTime() != null
+                && customerSchedule.getVaccineScheduleTime().getVaccineSchedule() != null
+                ? customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getName()
+                : "Vaccine";
+        String subject;
+        switch (customerSchedule.getStatusCustomerSchedule()) {
+            case confirmed:    subject = "[iVaccine] Lịch tiêm đã được xác nhận"; break;
+            case cancelled:    subject = "[iVaccine] Lịch tiêm đã bị hủy"; break;
+            case injected:     subject = "[iVaccine] Xác nhận đã tiêm vaccine"; break;
+            case finished:     subject = "[iVaccine] Lịch tiêm hoàn thành"; break;
+            case not_injected: subject = "[iVaccine] Thông báo chưa tiêm đúng lịch"; break;
+            default:           subject = "[iVaccine] Cập nhật lịch tiêm"; break;
         }
+        String customerName = customerSchedule.getFullName() != null ? customerSchedule.getFullName() : "Khách hàng";
+        String html = EmailTemplateUtils.bookingStatusUpdate(customerName, vaccineName, status);
+        mailService.sendEmail(to, subject, html, false, true);
     }
 //    private VaccineScheduleTime findOrCreateVaccineScheduleTime(Long vaccineScheduleId) {
 //        VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository.findFirstByVaccineScheduleId(vaccineScheduleId);
@@ -358,32 +373,28 @@ public class CustomerScheduleService {
             CustomerSchedule customerSchedule,
             VaccineScheduleTime vaccineScheduleTime) {
 
-        String subject = "Thông Báo Lịch Tiêm Và Tài Khoản";
-        StringBuilder emailBody = new StringBuilder();
+        String subject = isNewUser
+                ? "[iVaccine] Tài khoản và lịch tiêm của bạn đã được tạo"
+                : "[iVaccine] Xác nhận đặt lịch tiêm chủng";
 
-        emailBody.append("Kính chào ").append(customerSchedule.getFullName()).append(",\n\n");
+        String timeSlot = vaccineScheduleTime.getStart() + " - " + vaccineScheduleTime.getEnd();
+        String injectDate = vaccineScheduleTime.getInjectDate().toString();
+        String centerName = vaccineScheduleTime.getVaccineSchedule() != null
+                && vaccineScheduleTime.getVaccineSchedule().getCenter() != null
+                ? vaccineScheduleTime.getVaccineSchedule().getCenter().getCenterName()
+                : "iVaccine";
 
-        if (isNewUser) {
-            emailBody.append("Tài khoản của bạn đã được tạo thành công.\n")
-                    .append("Thông tin đăng nhập:\n")
-                    .append("Tài khoản: ").append(user.getEmail()).append("\n")
-                    .append("Mật khẩu: ").append(generatedPassword).append("\n\n");
-        }
-
-        emailBody.append("Thông tin lịch tiêm:\n")
-                .append("Ngày tiêm: ").append(vaccineScheduleTime.getInjectDate()).append("\n")
-                .append("Thời gian: Từ ").append(vaccineScheduleTime.getStart())
-                .append(" đến ").append(vaccineScheduleTime.getEnd()).append("\n")
-                .append("Trạng thái: Đang chờ xác nhận\n\n")
-                .append("Vui lòng đăng nhập để xem chi tiết lịch tiêm.");
-
-        mailService.sendEmail(
+        String html = EmailTemplateUtils.newAccountWithBooking(
+                customerSchedule.getFullName(),
                 user.getEmail(),
-                subject,
-                emailBody.toString(),
-                false,  // isMultipart
-                false   // isHtml
+                generatedPassword != null ? generatedPassword : "",
+                vaccineScheduleTime.getVaccineSchedule().getVaccine().getName(),
+                injectDate,
+                timeSlot,
+                isNewUser
         );
+
+        mailService.sendEmail(user.getEmail(), subject, html, false, true);
     }
 
     private String generateRandomPassword() {
@@ -423,10 +434,8 @@ public class CustomerScheduleService {
         User user = userUtils.getUserWithAuthority();
         VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository.findById(customerSchedule.getVaccineScheduleTime().getId()).get();
         CustomerSchedule result = save(customerSchedule, null, null);
-        mailService.sendEmail(user.getEmail(), "Thông báo đăng ký lịch tiêm",
-                "Bạn đã đăng ký lịch tiêm vaccine: "+vaccineScheduleTime.getVaccineSchedule().getVaccine().getName()+"<br>" +
-                        "Hãy hoàn tất thanh toán trước 24h, sau 24h lịch đăng ký của bạn sẽ bị hủy<br>"
-                , false, true);
+        String _html1 = EmailTemplateUtils.paymentReminder(customerSchedule.getFullName() != null ? customerSchedule.getFullName() : user.getEmail(), vaccineScheduleTime.getVaccineSchedule().getVaccine().getName(), "24 giờ kể từ lúc đăng ký");
+        mailService.sendEmail(user.getEmail(), "[iVaccine] Hoàn tất thanh toán lịch tiêm", _html1, false, true);
         return result;
     }
 
@@ -441,10 +450,13 @@ public class CustomerScheduleService {
         User user = userUtils.getUserWithAuthority();
         VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository.findById(customerScheduleVnpay.getCustomerSchedule().getVaccineScheduleTime().getId()).get();
         CustomerSchedule result = save(customerScheduleVnpay.getCustomerSchedule(), PayType.VNPAY, customerScheduleVnpay.getVnpOrderInfo());
-        mailService.sendEmail(user.getEmail(), "Thông báo đăng ký lịch tiêm",
-                "Bạn đã đăng ký lịch tiêm vaccine: "+vaccineScheduleTime.getVaccineSchedule().getVaccine().getName()+"<br>" +
-                        "Hãy chú ý thời gian tiêm trên website<br>"
-                , false, true);
+        String _htmlVnp = EmailTemplateUtils.bookingConfirmation(
+                customerScheduleVnpay.getCustomerSchedule().getFullName() != null ? customerScheduleVnpay.getCustomerSchedule().getFullName() : user.getEmail(),
+                vaccineScheduleTime.getVaccineSchedule().getVaccine().getName(),
+                vaccineScheduleTime.getInjectDate() != null ? vaccineScheduleTime.getInjectDate().toString() : "N/A",
+                vaccineScheduleTime.getStart() + " - " + vaccineScheduleTime.getEnd(),
+                "iVaccine");
+        mailService.sendEmail(user.getEmail(), "[iVaccine] Xác nhận lịch tiêm - Thanh toán VNPay", _htmlVnp, false, true);
         return result;
     }
 
@@ -467,10 +479,13 @@ public class CustomerScheduleService {
         CustomerSchedule result = save(customerSchedule, PayType.MOMO, orderId);
         User user = userUtils.getUserWithAuthority();
         VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository.findById(customerSchedule.getVaccineScheduleTime().getId()).get();
-        mailService.sendEmail(user.getEmail(), "Thông báo đăng ký lịch tiêm",
-                "Bạn đã đăng ký lịch tiêm vaccine: "+vaccineScheduleTime.getVaccineSchedule().getVaccine().getName()+"<br>" +
-                        "Hãy chú ý thời gian tiêm trên website<br>"
-                , false, true);
+        String _htmlMomo = EmailTemplateUtils.bookingConfirmation(
+                customerSchedule.getFullName() != null ? customerSchedule.getFullName() : user.getEmail(),
+                vaccineScheduleTime.getVaccineSchedule().getVaccine().getName(),
+                vaccineScheduleTime.getInjectDate() != null ? vaccineScheduleTime.getInjectDate().toString() : "N/A",
+                vaccineScheduleTime.getStart() + " - " + vaccineScheduleTime.getEnd(),
+                "iVaccine");
+        mailService.sendEmail(user.getEmail(), "[iVaccine] Xác nhận lịch tiêm - Thanh toán Momo", _htmlMomo, false, true);
         return result;
     }
 
@@ -620,9 +635,14 @@ public class CustomerScheduleService {
             throw new MessageException("Bạn chỉ được đổi lịch tiêm 3 lần");
         }
         else{
-            mailService.sendEmail(customerSchedule.getUser().getEmail(), "ThÔng báo đổi lịch tiêm",
-                    "Bạn đã đổi lịch tiêm "+customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getName()+" "+ customerSchedule.getCounterChange() +" lần<br>bạn chỉ được đổi tối đa 3 lần cho mỗi lịch đăng ký"
-                    ,false, true);
+            User csUser = customerSchedule.getUser();
+            String _htmlChg = EmailTemplateUtils.scheduleChange(
+                    customerSchedule.getFullName() != null ? customerSchedule.getFullName() : csUser.getEmail(),
+                    customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getName(),
+                    vaccineScheduleTime.getInjectDate() != null ? vaccineScheduleTime.getInjectDate().toString() : "N/A",
+                    vaccineScheduleTime.getStart() + " - " + vaccineScheduleTime.getEnd(),
+                    3 - customerSchedule.getCounterChange());
+            mailService.sendEmail(csUser.getEmail(), "[iVaccine] Thay đổi lịch hẹn tiêm chủng", _htmlChg, false, true);
         }
         customerScheduleRepository.save(customerSchedule);
     }
@@ -655,4 +675,74 @@ public class CustomerScheduleService {
         // Lưu và trả về
         return customerScheduleRepository.save(customerSchedule);
     }
+
+    // -------------------- PHÂN CÔNG BÁC SĨ / Y TÁ --------------------
+
+    public void assignDoctorNurse(AssignDoctorNurseRequest request) {
+        CustomerSchedule schedule = customerScheduleRepository.findById(request.getCustomerScheduleId())
+                .orElseThrow(() -> new MessageException(HttpStatus.NOT_FOUND.value(), "Không tìm thấy lịch đăng ký"));
+
+        if (request.getDoctorId() != null) {
+            Doctor doctor = doctorRepository.findById(request.getDoctorId())
+                    .orElseThrow(() -> new MessageException(HttpStatus.NOT_FOUND.value(), "Không tìm thấy bác sĩ"));
+            schedule.setDoctor(doctor);
+        }
+
+        if (request.getNurseId() != null) {
+            Nurse nurse = nurseRepository.findById(request.getNurseId())
+                    .orElseThrow(() -> new MessageException(HttpStatus.NOT_FOUND.value(), "Không tìm thấy y tá"));
+            schedule.setNurse(nurse);
+        }
+
+        customerScheduleRepository.save(schedule);
+    }
+
+    // -------------------- DANH SÁCH BỆNH NHÂN THEO BÁC SĨ --------------------
+
+    public Page<ListCustomerScheduleResponse> listCustomerScheduleForDoctor(ListCustomerScheduleRequest request) {
+        User currentUser = userUtils.getUserWithAuthority();
+        Doctor doctor = doctorRepository.findByUser_Id(currentUser.getId())
+                .orElseThrow(() -> new MessageException(HttpStatus.NOT_FOUND.value(), "Không tìm thấy thông tin bác sĩ"));
+
+        Pageable pageable = PageRequest.of(request.getPage() - 1, request.getLimit(), Sort.by(Sort.Direction.DESC, "createdDate"));
+        Page<CustomerSchedule> page = customerScheduleRepository.findByDoctor_Id(doctor.getId(), pageable);
+        return page.map(e -> toResponseDto(e));
+    }
+
+    // -------------------- DANH SÁCH BỆNH NHÂN THEO Y TÁ --------------------
+
+    public Page<ListCustomerScheduleResponse> listCustomerScheduleForNurse(ListCustomerScheduleRequest request) {
+        User currentUser = userUtils.getUserWithAuthority();
+        Nurse nurse = nurseRepository.findByUser_Id(currentUser.getId())
+                .orElseThrow(() -> new MessageException(HttpStatus.NOT_FOUND.value(), "Không tìm thấy thông tin y tá"));
+
+        Pageable pageable = PageRequest.of(request.getPage() - 1, request.getLimit(), Sort.by(Sort.Direction.DESC, "createdDate"));
+        Page<CustomerSchedule> page = customerScheduleRepository.findByNurse_Id(nurse.getId(), pageable);
+        return page.map(e -> toResponseDto(e));
+    }
+
+    // -------------------- HELPER: map entity -> DTO --------------------
+
+    private ListCustomerScheduleResponse toResponseDto(CustomerSchedule e) {
+        Optional<User> user = userRepository.findById(e.getUser().getId());
+        Optional<VaccineScheduleTime> vaccineScheduleTime = vaccineScheduleTimeRepository.findById(e.getVaccineScheduleTime().getId());
+        return ListCustomerScheduleResponse.builder()
+                .id(e.getId())
+                .status(e.getStatusCustomerSchedule().name())
+                .fullName(e.getFullName())
+                .createdDate(e.getCreatedDate())
+                .vaccineScheduleTime(vaccineScheduleTime.orElse(null))
+                .user(user.orElse(null))
+                .note(e.getNote())
+                .payStatus(e.getCustomerSchedulePay() != null &&
+                        (e.getCustomerSchedulePay() == CustomerSchedulePay.THANH_TOAN_MOMO ||
+                                e.getCustomerSchedulePay() == CustomerSchedulePay.THANH_TOAN_VNPAY))
+                .healthStatusAfter(e.getHealthStatusAfter())
+                .healthStatusBefore(e.getHealthStatusBefore())
+                .completedDate(e.getCompletedDate())
+                .doctor(e.getDoctor())
+                .nurse(e.getNurse())
+                .build();
+    }
 }
+

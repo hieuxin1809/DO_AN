@@ -39,19 +39,17 @@ async function processLogin(user, token) {
     await new Promise(resolve => setTimeout(resolve, 1500));
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify(user));
-    if (user.authorities.name === "Admin") {
-        window.location.href = 'admin/index';
-    }
-    if (user.authorities.name === "Customer") {
+
+    const role = user?.authorities?.name;
+    if (role === "Admin") {
+        window.location.href = '/admin/index';
+    } else if (role === "Customer") {
         window.location.href = '/index';
-    }
-    if (user.authorities.name === "Doctor") {
-        window.location.href = 'staff/customer-schedule-1';
-    }
-    if (user.authorities.name === "Nurse") {
-        window.location.href = 'staff/vaccine';
-    }
-    if (user.authorities.name === "Support Staff") {
+    } else if (role === "Doctor") {
+        window.location.href = '/staff/customer-schedule-1';
+    } else if (role === "Nurse") {
+        window.location.href = '/staff/vaccine';
+    } else if (role === "Support Staff") {
         window.location.href = '/staff/chat';
     }
 }

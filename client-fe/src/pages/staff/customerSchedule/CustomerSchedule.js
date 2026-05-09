@@ -1,12 +1,12 @@
 import React, {useEffect, useRef, useState} from "react";
 import {Button, Form, Input, Modal, Pagination, Popconfirm, Select, Table, Tag,} from "antd";
 import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
-import {faCheck, faRemove, faSyringe} from "@fortawesome/free-solid-svg-icons";
+import {faCheck, faRemove, faSyringe, faUserPlus} from "@fortawesome/free-solid-svg-icons";
 import dayjs from "dayjs";
 import {AppNotification} from "../../../components/AppNotification";
 import {CustomerScheduleApi} from "../../../services/staff/CustomerSchedule.api";
 import {VaccineScheduleApi} from "../../../services/staff/VaccineSchedule.api";
-import { getMethod } from "../../../services/request";
+import { getMethod, postMethodPayload } from "../../../services/request";
 
 const { Option } = Select;
 
@@ -25,6 +25,15 @@ const CustomerSchedule = () => {
     page: 1,
     limit: 10,
   });
+
+  // States cho phân công bác sĩ / y tá
+  const [assignModal, setAssignModal] = useState(false);
+  const [assignRecord, setAssignRecord] = useState(null);
+  const [doctors, setDoctors] = useState([]);
+  const [nurses, setNurses] = useState([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState(null);
+  const [selectedNurseId, setSelectedNurseId] = useState(null);
+  const [assignLoading, setAssignLoading] = useState(false);
 
   // States cho form đăng ký
   const [vaccineSchedules, setVaccineSchedules] = useState([]);
@@ -187,6 +196,52 @@ const CustomerSchedule = () => {
     }
   };
 
+  const openAssignModal = async (record) => {
+    setAssignRecord(record);
+    setSelectedDoctorId(record.doctor?.id || null);
+    setSelectedNurseId(record.nurse?.id || null);
+    // load doctors & nurses if not loaded
+    if (doctors.length === 0) {
+      try {
+        const [dRes, nRes] = await Promise.all([
+          getMethod("/api/doctor/public/find-all"),
+          getMethod("/api/nurse/public/find-all"),
+        ]);
+        const dData = await dRes.json();
+        const nData = await nRes.json();
+        setDoctors(Array.isArray(dData) ? dData : []);
+        setNurses(Array.isArray(nData) ? nData : []);
+      } catch {
+        AppNotification.error("Không tải được danh sách bác sĩ / y tá");
+      }
+    }
+    setAssignModal(true);
+  };
+
+  const handleAssign = async () => {
+    if (!assignRecord) return;
+    setAssignLoading(true);
+    try {
+      const res = await postMethodPayload("/api/customer-schedule/staff/assign-doctor-nurse", {
+        customerScheduleId: assignRecord.id,
+        doctorId: selectedDoctorId || null,
+        nurseId: selectedNurseId || null,
+      });
+      if (res.ok) {
+        AppNotification.success("Phân công thành công");
+        setAssignModal(false);
+        handleCustomerSchedules(formSearch);
+      } else {
+        const data = await res.json();
+        AppNotification.error(data.defaultMessage || "Phân công thất bại");
+      }
+    } catch {
+      AppNotification.error("Lỗi kết nối");
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
   const statusColorMap = {
     confirmed: "green", pending: "gold", cancelled: "red",
     injected: "blue", finished: "cyan", not_injected: "orange",
@@ -208,16 +263,12 @@ const CustomerSchedule = () => {
       render: (_, record) => <div>{record?.payStatus ? "Đã thanh toán" : "Chưa thanh toán"}</div>,
     },
     {
-      title: "Thời gian bắt đầu", dataIndex: "vaccineSchedule", key: "startDate", align: "center",
-      render: (date) => date?.startDate ? dayjs(date.startDate).format("HH:mm DD-MM-YYYY") : "N/A",
-    },
-    {
-      title: "Thời gian kết thúc", dataIndex: "vaccineSchedule", key: "endDate", align: "center",
-      render: (date) => date?.endDate ? dayjs(date.endDate).format("HH:mm DD-MM-YYYY") : "N/A",
-    },
-    {
       title: "Ngày tạo", dataIndex: "createdDate", key: "createdDate", align: "center",
-      render: (date) => dayjs(date).format("HH:mm:ss DD-MM-YYYY"),
+      render: (date) => dayjs(date).format("HH:mm DD-MM-YYYY"),
+    },
+    {
+      title: "Thời gian kết thúc", dataIndex: "completedDate", key: "completedDate", align: "center",
+      render: (date) => date ? dayjs(date).format("HH:mm DD-MM-YYYY") : <span style={{ color: "#bbb" }}>—</span>,
     },
     {
       title: "Trạng Thái", dataIndex: "status", key: "status", align: "center",
@@ -226,9 +277,25 @@ const CustomerSchedule = () => {
       ),
     },
     {
+      title: "Bác sĩ",
+      key: "doctor",
+      align: "center",
+      render: (_, record) => record.doctor ? (
+        <span style={{ color: "#1677ff" }}>{record.doctor.fullName}</span>
+      ) : <span style={{ color: "#bbb" }}>Chưa phân công</span>,
+    },
+    {
+      title: "Y tá",
+      key: "nurse",
+      align: "center",
+      render: (_, record) => record.nurse ? (
+        <span style={{ color: "#52c41a" }}>{record.nurse.fullName}</span>
+      ) : <span style={{ color: "#bbb" }}>Chưa phân công</span>,
+    },
+    {
       title: "Hành động", dataIndex: "hanhDong", key: "hanhDong", align: "center",
       render: (text, record) => (
-        <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: "8px", flexWrap: "wrap" }}>
           {record.status === "pending" && (
             <>
               <Popconfirm
@@ -258,6 +325,15 @@ const CustomerSchedule = () => {
                 <FontAwesomeIcon icon={faSyringe} /> Đã tiêm
               </Button>
             </Popconfirm>
+          )}
+          {record.status !== "cancelled" && record.status !== "injected" && (
+            <Button
+              title="Phân công bác sĩ / y tá"
+              onClick={() => openAssignModal(record)}
+              style={{ borderColor: "#722ed1", color: "#722ed1" }}
+            >
+              <FontAwesomeIcon icon={faUserPlus} /> Phân công
+            </Button>
           )}
         </div>
       ),
@@ -307,6 +383,44 @@ const CustomerSchedule = () => {
           showSizeChanger onChange={onPageChange} style={{ marginLeft: "auto" }}
         />
       </div>
+
+      {/* Modal phân công bác sĩ / y tá */}
+      <Modal
+        title="Phân công bác sĩ / y tá"
+        open={assignModal}
+        onCancel={() => setAssignModal(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setAssignModal(false)}>Hủy</Button>,
+          <Button key="save" type="primary" loading={assignLoading} onClick={handleAssign}>Lưu phân công</Button>,
+        ]}
+      >
+        <Form layout="vertical">
+          <Form.Item label="Bác sĩ phụ trách">
+            <Select
+              allowClear
+              showSearch
+              placeholder="Chọn bác sĩ"
+              value={selectedDoctorId || undefined}
+              onChange={(val) => setSelectedDoctorId(val || null)}
+              optionFilterProp="label"
+              style={{ width: "100%" }}
+              options={doctors.map((d) => ({ value: d.id, label: d.fullName || `Bác sĩ #${d.id}` }))}
+            />
+          </Form.Item>
+          <Form.Item label="Y tá phụ trách">
+            <Select
+              allowClear
+              showSearch
+              placeholder="Chọn y tá"
+              value={selectedNurseId || undefined}
+              onChange={(val) => setSelectedNurseId(val || null)}
+              optionFilterProp="label"
+              style={{ width: "100%" }}
+              options={nurses.map((n) => ({ value: n.id, label: n.fullName || `Y tá #${n.id}` }))}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title="Đăng ký tiêm cho khách"

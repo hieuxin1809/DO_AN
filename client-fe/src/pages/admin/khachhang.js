@@ -21,19 +21,33 @@ const AdminKhachHang = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [editCustomer, setEditCustomer] = useState(null);
   const [editModal, setEditModal] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  // Address
+  const [provinces, setProvinces] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [wards, setWards] = useState([]);
+  const [selectedProvinceCode, setSelectedProvinceCode] = useState("");
+  const [selectedDistrictCode, setSelectedDistrictCode] = useState("");
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingWards, setLoadingWards] = useState(false);
 
   useEffect(() => {
     const modal = new Modal(document.getElementById("editCustomerModal"));
     setEditModal(modal);
+    fetch("https://provinces.open-api.vn/api/p/")
+      .then((res) => res.json())
+      .then((data) => setProvinces(data))
+      .catch((err) => console.error("Error loading provinces:", err));
   }, []);
 
   useEffect(() => {
     const getKhachHang = async () => {
       var response = await getMethod(
         "/api/customer-profile/admin/list-customer?page=0&size=" +
-        size +
-        "&sort=id,asc" +
-        (searchTerm ? "&q=" + searchTerm : ""),
+          size +
+          "&sort=id,asc" +
+          (searchTerm ? "&q=" + searchTerm : ""),
       );
       var result = await response.json();
       setItems(result.content);
@@ -49,9 +63,7 @@ const AdminKhachHang = () => {
       "&size=" +
       size +
       "&sort=id,asc";
-    if (searchTerm) {
-      url += "&q=" + searchTerm;
-    }
+    if (searchTerm) url += "&q=" + searchTerm;
     var response = await getMethod(url);
     var result = await response.json();
     setItems(result.content);
@@ -59,43 +71,170 @@ const AdminKhachHang = () => {
   }
 
   const handlePageClick = async (data) => {
-    var currentPage = data.selected;
-    await getAllKhachHang(currentPage);
+    await getAllKhachHang(data.selected);
   };
 
   async function deleteKhachHang(id) {
     var con = window.confirm("Bạn chắc chắn muốn xóa khách hàng này?");
-    if (con == false) {
-      return;
-    }
+    if (!con) return;
     var url = `/api/customer-profile/admin/delete/${id}`;
     const response = await deleteMethod(url);
     if (response.status < 300) {
       toast.success("Xóa thành công!");
       getAllKhachHang(0);
     }
-    if (response.status == 417) {
+    if (response.status === 417) {
       var result = await response.json();
       toast.warning(result.defaultMessage);
     }
   }
 
-  const handleEditClick = (item) => {
+  const handleEditClick = async (item) => {
     setEditCustomer({ ...item });
-    if (editModal) {
-      editModal.show();
+    setErrors({});
+    setDistricts([]);
+    setWards([]);
+    setSelectedProvinceCode("");
+    setSelectedDistrictCode("");
+
+    if (editModal) editModal.show();
+
+    // Pre-select address từ dữ liệu hiện có
+    if (item.city && provinces.length > 0) {
+      const province = provinces.find((p) => p.name === item.city);
+      if (province) {
+        setSelectedProvinceCode(String(province.code));
+        try {
+          setLoadingDistricts(true);
+          const res = await fetch(
+            `https://provinces.open-api.vn/api/p/${province.code}?depth=2`,
+          );
+          const data = await res.json();
+          const distList = data.districts || [];
+          setDistricts(distList);
+          setLoadingDistricts(false);
+
+          if (item.district) {
+            const dist = distList.find((d) => d.name === item.district);
+            if (dist) {
+              setSelectedDistrictCode(String(dist.code));
+              setLoadingWards(true);
+              const res2 = await fetch(
+                `https://provinces.open-api.vn/api/d/${dist.code}?depth=2`,
+              );
+              const data2 = await res2.json();
+              setWards(data2.wards || []);
+              setLoadingWards(false);
+            }
+          }
+        } catch (err) {
+          console.error("Error pre-loading address:", err);
+          setLoadingDistricts(false);
+          setLoadingWards(false);
+        }
+      }
     }
+  };
+
+  const handleProvinceChange = async (e) => {
+    const code = e.target.value;
+    const name = provinces.find((p) => String(p.code) === code)?.name || "";
+    setSelectedProvinceCode(code);
+    setSelectedDistrictCode("");
+    setDistricts([]);
+    setWards([]);
+    setEditCustomer((prev) => ({ ...prev, city: name, district: "", ward: "" }));
+    if (errors.city) setErrors((prev) => ({ ...prev, city: null }));
+
+    if (code) {
+      try {
+        setLoadingDistricts(true);
+        const res = await fetch(
+          `https://provinces.open-api.vn/api/p/${code}?depth=2`,
+        );
+        const data = await res.json();
+        setDistricts(data.districts || []);
+      } catch (err) {
+        console.error("Error loading districts:", err);
+      } finally {
+        setLoadingDistricts(false);
+      }
+    }
+  };
+
+  const handleDistrictChange = async (e) => {
+    const code = e.target.value;
+    const name = districts.find((d) => String(d.code) === code)?.name || "";
+    setSelectedDistrictCode(code);
+    setWards([]);
+    setEditCustomer((prev) => ({ ...prev, district: name, ward: "" }));
+    if (errors.district) setErrors((prev) => ({ ...prev, district: null }));
+
+    if (code) {
+      try {
+        setLoadingWards(true);
+        const res = await fetch(
+          `https://provinces.open-api.vn/api/d/${code}?depth=2`,
+        );
+        const data = await res.json();
+        setWards(data.wards || []);
+      } catch (err) {
+        console.error("Error loading wards:", err);
+      } finally {
+        setLoadingWards(false);
+      }
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    const phoneRegex = /^[0-9]{9,11}$/;
+
+    if (!editCustomer.fullName || editCustomer.fullName.trim() === "") {
+      newErrors.fullName = "Họ tên không được để trống";
+    }
+    if (!editCustomer.birthdate) {
+      newErrors.birthdate = "Ngày sinh không được để trống";
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (new Date(editCustomer.birthdate) >= today) {
+        newErrors.birthdate = "Ngày sinh phải là ngày trong quá khứ";
+      }
+    }
+    if (!editCustomer.phone || editCustomer.phone.trim() === "") {
+      newErrors.phone = "Số điện thoại không được để trống";
+    } else if (!phoneRegex.test(editCustomer.phone.trim())) {
+      newErrors.phone = "Số điện thoại phải từ 9-11 chữ số";
+    }
+    if (!editCustomer.street || editCustomer.street.trim() === "") {
+      newErrors.street = "Đường/Số nhà không được để trống";
+    }
+    if (!editCustomer.city) newErrors.city = "Vui lòng chọn tỉnh/thành phố";
+    if (!editCustomer.district) newErrors.district = "Vui lòng chọn quận/huyện";
+    if (!editCustomer.ward) newErrors.ward = "Vui lòng chọn phường/xã";
+
+    if (editCustomer.contactPhone && editCustomer.contactPhone.trim() !== "") {
+      if (!phoneRegex.test(editCustomer.contactPhone.trim())) {
+        newErrors.contactPhone = "SĐT người liên hệ phải từ 9-11 chữ số";
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   async function updateKhachHang() {
     if (!editCustomer) return;
+    if (!validateForm()) {
+      toast.warning("Vui lòng kiểm tra lại thông tin!");
+      return;
+    }
 
     const fileInput = document.getElementById("avatarUpload");
     if (fileInput.files.length > 0) {
       const avatarUrl = await uploadSingleFile(fileInput);
-      if (avatarUrl) {
-        editCustomer.avatar = avatarUrl;
-      }
+      if (avatarUrl) editCustomer.avatar = avatarUrl;
     }
 
     const response = await putMethod(
@@ -105,18 +244,16 @@ const AdminKhachHang = () => {
     if (response.status < 300) {
       toast.success("Cập nhật thành công!");
       getAllKhachHang(0);
-
       if (editModal) {
         editModal.hide();
         document.body.classList.remove("modal-open");
         document.body.style.overflow = "";
         document.body.style.paddingRight = "";
         const backdrop = document.querySelector(".modal-backdrop");
-        if (backdrop) {
-          backdrop.remove();
-        }
+        if (backdrop) backdrop.remove();
       }
       setEditCustomer(null);
+      setErrors({});
     } else {
       const result = await response.json();
       toast.error(result.defaultMessage || "Có lỗi xảy ra");
@@ -144,6 +281,7 @@ const AdminKhachHang = () => {
           </button>
         </div>
       </div>
+
       <div className="tablediv">
         <div className="headertable">
           <span className="lbtable">Danh sách khách hàng</span>
@@ -162,34 +300,32 @@ const AdminKhachHang = () => {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => {
-                return (
-                  <tr key={item.id}>
-                    <td>{item.id}</td>
-                    <td>{item.fullName}</td>
-                    <td>{item.gender === "Male" ? "Nam" : "Nữ"}</td>
-                    <td>{item.birthdate}</td>
-                    <td>{item.phone}</td>
-                    <td>{item.contactName}</td>
-                    <td>
-                      <i
-                        onClick={() => setSelectedCustomer(item)}
-                        data-bs-toggle="modal"
-                        data-bs-target="#customerDetailModal"
-                        className="fa fa-eye iconaction"
-                      ></i>
-                      <i
-                        onClick={() => handleEditClick(item)}
-                        className="fa fa-edit iconaction"
-                      ></i>
-                      <i
-                        onClick={() => deleteKhachHang(item.id)}
-                        className="fa fa-trash iconaction"
-                      ></i>
-                    </td>
-                  </tr>
-                );
-              })}
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.id}</td>
+                  <td>{item.fullName}</td>
+                  <td>{item.gender === "Male" ? "Nam" : "Nữ"}</td>
+                  <td>{item.birthdate}</td>
+                  <td>{item.phone}</td>
+                  <td>{item.contactName}</td>
+                  <td>
+                    <i
+                      onClick={() => setSelectedCustomer(item)}
+                      data-bs-toggle="modal"
+                      data-bs-target="#customerDetailModal"
+                      className="fa fa-eye iconaction"
+                    ></i>
+                    <i
+                      onClick={() => handleEditClick(item)}
+                      className="fa fa-edit iconaction"
+                    ></i>
+                    <i
+                      onClick={() => deleteKhachHang(item.id)}
+                      className="fa fa-trash iconaction"
+                    ></i>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
           <ReactPaginate
@@ -212,6 +348,7 @@ const AdminKhachHang = () => {
         </div>
       </div>
 
+      {/* Modal xem chi tiết */}
       <div
         className="modal fade"
         id="customerDetailModal"
@@ -235,45 +372,21 @@ const AdminKhachHang = () => {
             <div className="modal-body">
               {selectedCustomer && (
                 <div>
-                  <p>
-                    <strong>Họ tên:</strong> {selectedCustomer.fullName}
-                  </p>
-                  <p>
-                    <strong>Giới tính:</strong>{" "}
-                    {selectedCustomer.gender === "Male" ? "Nam" : "Nữ"}
-                  </p>
-                  <p>
-                    <strong>Ngày sinh:</strong> {selectedCustomer.birthdate}
-                  </p>
-                  <p>
-                    <strong>Số điện thoại:</strong> {selectedCustomer.phone}
-                  </p>
+                  <p><strong>Họ tên:</strong> {selectedCustomer.fullName}</p>
+                  <p><strong>Giới tính:</strong> {selectedCustomer.gender === "Male" ? "Nam" : "Nữ"}</p>
+                  <p><strong>Ngày sinh:</strong> {selectedCustomer.birthdate}</p>
+                  <p><strong>Số điện thoại:</strong> {selectedCustomer.phone}</p>
                   <p>
                     <strong>Địa chỉ:</strong> {selectedCustomer.street},{" "}
                     {selectedCustomer.ward}, {selectedCustomer.district},{" "}
                     {selectedCustomer.city}
                   </p>
-                  <p>
-                    <strong>Bảo hiểm y tế:</strong>{" "}
-                    {selectedCustomer.insuranceStatus ? "Có" : "Không"}
-                  </p>
-                  <p>
-                    <strong>Người liên hệ:</strong>{" "}
-                    {selectedCustomer.contactName}
-                  </p>
-                  <p>
-                    <strong>Mối Quan hệ:</strong>{" "}
-                    {selectedCustomer.contactRelationship}
-                  </p>
-                  <p>
-                    <strong>SĐT người liên hệ:</strong>{" "}
-                    {selectedCustomer.contactPhone}
-                  </p>
+                  <p><strong>Người liên hệ:</strong> {selectedCustomer.contactName}</p>
+                  <p><strong>Mối quan hệ:</strong> {selectedCustomer.contactRelationship}</p>
+                  <p><strong>SĐT người liên hệ:</strong> {selectedCustomer.contactPhone}</p>
                   <p>
                     <strong>Ngày tạo:</strong>{" "}
-                    {new Date(selectedCustomer.createdDate).toLocaleDateString(
-                      "vi-VN",
-                    )}
+                    {new Date(selectedCustomer.createdDate).toLocaleDateString("vi-VN")}
                   </p>
                   {selectedCustomer.avatar && (
                     <img
@@ -286,11 +399,7 @@ const AdminKhachHang = () => {
               )}
             </div>
             <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                data-bs-dismiss="modal"
-              >
+              <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">
                 Đóng
               </button>
             </div>
@@ -298,6 +407,7 @@ const AdminKhachHang = () => {
         </div>
       </div>
 
+      {/* Modal cập nhật */}
       <div
         className="modal fade"
         id="editCustomerModal"
@@ -321,151 +431,172 @@ const AdminKhachHang = () => {
             <div className="modal-body">
               {editCustomer && (
                 <div>
+                  {/* Họ tên */}
                   <div className="mb-3">
-                    <label className="form-label">Họ tên</label>
+                    <label className="form-label fw-semibold">
+                      Họ tên <span className="text-danger">*</span>
+                    </label>
                     <input
                       type="text"
-                      className="form-control"
-                      value={editCustomer.fullName}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          fullName: e.target.value,
-                        })
-                      }
+                      className={`form-control ${errors.fullName ? "is-invalid" : ""}`}
+                      value={editCustomer.fullName || ""}
+                      onChange={(e) => {
+                        setEditCustomer({ ...editCustomer, fullName: e.target.value });
+                        if (errors.fullName) setErrors({ ...errors, fullName: null });
+                      }}
                     />
+                    {errors.fullName && <div className="invalid-feedback">{errors.fullName}</div>}
                   </div>
+
+                  {/* Giới tính */}
                   <div className="mb-3">
-                    <label className="form-label">Giới tính</label>
+                    <label className="form-label fw-semibold">Giới tính</label>
                     <select
                       className="form-control"
                       value={editCustomer.gender}
                       onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          gender: e.target.value,
-                        })
+                        setEditCustomer({ ...editCustomer, gender: e.target.value })
                       }
                     >
                       <option value="Male">Nam</option>
                       <option value="Female">Nữ</option>
                     </select>
                   </div>
+
+                  {/* Ngày sinh */}
                   <div className="mb-3">
-                    <label className="form-label">Ngày sinh</label>
+                    <label className="form-label fw-semibold">
+                      Ngày sinh <span className="text-danger">*</span>
+                    </label>
                     <input
                       type="date"
-                      className="form-control"
-                      value={editCustomer.birthdate}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          birthdate: e.target.value,
-                        })
-                      }
+                      className={`form-control ${errors.birthdate ? "is-invalid" : ""}`}
+                      value={editCustomer.birthdate || ""}
+                      onChange={(e) => {
+                        setEditCustomer({ ...editCustomer, birthdate: e.target.value });
+                        if (errors.birthdate) setErrors({ ...errors, birthdate: null });
+                      }}
                     />
+                    {errors.birthdate && <div className="invalid-feedback">{errors.birthdate}</div>}
                   </div>
+
+                  {/* Số điện thoại */}
                   <div className="mb-3">
-                    <label className="form-label">Số điện thoại</label>
+                    <label className="form-label fw-semibold">
+                      Số điện thoại <span className="text-danger">*</span>
+                    </label>
                     <input
                       type="text"
-                      className="form-control"
-                      value={editCustomer.phone}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          phone: e.target.value,
-                        })
-                      }
+                      className={`form-control ${errors.phone ? "is-invalid" : ""}`}
+                      value={editCustomer.phone || ""}
+                      onChange={(e) => {
+                        setEditCustomer({ ...editCustomer, phone: e.target.value });
+                        if (errors.phone) setErrors({ ...errors, phone: null });
+                      }}
                     />
+                    {errors.phone && <div className="invalid-feedback">{errors.phone}</div>}
                   </div>
+
+                  {/* Địa chỉ */}
                   <div className="mb-3">
-                    <label className="form-label">Địa chỉ</label>
-                    <input
-                      type="text"
-                      className="form-control mb-2"
-                      placeholder="Đường"
-                      value={editCustomer.street}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          street: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      type="text"
-                      className="form-control mb-2"
-                      placeholder="Phường/Xã"
-                      value={editCustomer.ward}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          ward: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      type="text"
-                      className="form-control mb-2"
-                      placeholder="Quận/Huyện"
-                      value={editCustomer.district}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          district: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Tỉnh/Thành phố"
-                      value={editCustomer.city}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          city: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">Bảo hiểm y tế</label>
+                    <label className="form-label fw-semibold">
+                      Địa chỉ <span className="text-danger">*</span>
+                    </label>
+
+                    {/* Tỉnh/Thành phố */}
                     <select
-                      className="form-control"
-                      value={editCustomer.insuranceStatus}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          insuranceStatus: e.target.value === "true",
-                        })
-                      }
+                      className={`form-control mb-2 ${errors.city ? "is-invalid" : ""}`}
+                      value={selectedProvinceCode}
+                      onChange={handleProvinceChange}
                     >
-                      <option value="true">Có</option>
-                      <option value="false">Không</option>
+                      <option value="">-- Chọn Tỉnh/Thành phố --</option>
+                      {provinces.map((p) => (
+                        <option key={p.code} value={String(p.code)}>
+                          {p.name}
+                        </option>
+                      ))}
                     </select>
+                    {errors.city && (
+                      <div className="invalid-feedback d-block mb-1">{errors.city}</div>
+                    )}
+
+                    {/* Quận/Huyện */}
+                    <select
+                      className={`form-control mb-2 ${errors.district ? "is-invalid" : ""}`}
+                      value={selectedDistrictCode}
+                      onChange={handleDistrictChange}
+                      disabled={!selectedProvinceCode || loadingDistricts}
+                    >
+                      <option value="">
+                        {loadingDistricts ? "Đang tải..." : "-- Chọn Quận/Huyện --"}
+                      </option>
+                      {districts.map((d) => (
+                        <option key={d.code} value={String(d.code)}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.district && (
+                      <div className="invalid-feedback d-block mb-1">{errors.district}</div>
+                    )}
+
+                    {/* Phường/Xã */}
+                    <select
+                      className={`form-control mb-2 ${errors.ward ? "is-invalid" : ""}`}
+                      value={editCustomer.ward || ""}
+                      onChange={(e) => {
+                        setEditCustomer({ ...editCustomer, ward: e.target.value });
+                        if (errors.ward) setErrors({ ...errors, ward: null });
+                      }}
+                      disabled={!selectedDistrictCode || loadingWards}
+                    >
+                      <option value="">
+                        {loadingWards ? "Đang tải..." : "-- Chọn Phường/Xã --"}
+                      </option>
+                      {wards.map((w) => (
+                        <option key={w.code} value={w.name}>
+                          {w.name}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.ward && (
+                      <div className="invalid-feedback d-block mb-1">{errors.ward}</div>
+                    )}
+
+                    {/* Đường/Số nhà */}
+                    <input
+                      type="text"
+                      className={`form-control ${errors.street ? "is-invalid" : ""}`}
+                      placeholder="Số nhà, tên đường"
+                      value={editCustomer.street || ""}
+                      onChange={(e) => {
+                        setEditCustomer({ ...editCustomer, street: e.target.value });
+                        if (errors.street) setErrors({ ...errors, street: null });
+                      }}
+                    />
+                    {errors.street && <div className="invalid-feedback">{errors.street}</div>}
                   </div>
+
+                  {/* Người liên hệ */}
                   <div className="mb-3">
-                    <label className="form-label">Người liên hệ</label>
+                    <label className="form-label fw-semibold">Người liên hệ</label>
                     <input
                       type="text"
                       className="form-control"
-                      value={editCustomer.contactName}
+                      value={editCustomer.contactName || ""}
                       onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          contactName: e.target.value,
-                        })
+                        setEditCustomer({ ...editCustomer, contactName: e.target.value })
                       }
                     />
                   </div>
+
+                  {/* Mối quan hệ */}
                   <div className="mb-3">
-                    <label className="form-label">Mối quan hệ</label>
+                    <label className="form-label fw-semibold">Mối quan hệ</label>
                     <input
                       type="text"
                       className="form-control"
-                      value={editCustomer.contactRelationship}
+                      value={editCustomer.contactRelationship || ""}
                       onChange={(e) =>
                         setEditCustomer({
                           ...editCustomer,
@@ -474,22 +605,28 @@ const AdminKhachHang = () => {
                       }
                     />
                   </div>
+
+                  {/* SĐT người liên hệ */}
                   <div className="mb-3">
-                    <label className="form-label">SĐT người liên hệ</label>
+                    <label className="form-label fw-semibold">SĐT người liên hệ</label>
                     <input
                       type="text"
-                      className="form-control"
-                      value={editCustomer.contactPhone}
-                      onChange={(e) =>
-                        setEditCustomer({
-                          ...editCustomer,
-                          contactPhone: e.target.value,
-                        })
-                      }
+                      className={`form-control ${errors.contactPhone ? "is-invalid" : ""}`}
+                      value={editCustomer.contactPhone || ""}
+                      onChange={(e) => {
+                        setEditCustomer({ ...editCustomer, contactPhone: e.target.value });
+                        if (errors.contactPhone)
+                          setErrors({ ...errors, contactPhone: null });
+                      }}
                     />
+                    {errors.contactPhone && (
+                      <div className="invalid-feedback">{errors.contactPhone}</div>
+                    )}
                   </div>
+
+                  {/* Ảnh đại diện */}
                   <div className="mb-3">
-                    <label className="form-label">Ảnh đại diện</label>
+                    <label className="form-label fw-semibold">Ảnh đại diện</label>
                     <input
                       type="file"
                       className="form-control"

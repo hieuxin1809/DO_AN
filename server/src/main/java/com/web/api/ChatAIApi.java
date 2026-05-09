@@ -1,6 +1,6 @@
 package com.web.api;
 
-import com.web.service.GeminiService;
+import com.web.service.DeepSeekService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,7 +13,7 @@ import java.util.Map;
 public class ChatAIApi {
 
     @Autowired
-    private GeminiService geminiService;
+    private DeepSeekService deepSeekService;
 
     @PostMapping("/ask")
     public ResponseEntity<String> askAI(@RequestBody Map<String, String> request) {
@@ -21,8 +21,8 @@ public class ChatAIApi {
         if (message == null || message.trim().isEmpty()) {
             return ResponseEntity.badRequest().body("Nội dung không được để trống");
         }
-        
-        String response = geminiService.chatWithAI(message);
+
+        String response = deepSeekService.chatWithAI(message);
         return ResponseEntity.ok(response);
     }
 }

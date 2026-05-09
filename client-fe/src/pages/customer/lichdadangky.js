@@ -14,6 +14,47 @@ import vnpay from '../../assest/images/vnpay.jpg';
 import { formatMoney } from '../../services/money';
 import DoiLich from './doilich'
 
+const MAX_CHARS = 80;
+
+function HealthStatusCell({ item, onViewMore }) {
+    const before = item.healthStatusBefore;
+    const after = item.healthStatusAfter;
+
+    if (!before && !after) return <span style={{ color: '#bbb' }}>—</span>;
+
+    const text = before || after;
+    const isTruncated = text && text.length > MAX_CHARS;
+
+    return (
+        <div style={{ fontSize: 13 }}>
+            {before && (
+                <div>
+                    <span style={{ fontWeight: 500, color: '#555' }}>Trước: </span>
+                    {isTruncated && before === text
+                        ? <>{before.slice(0, MAX_CHARS)}... </>
+                        : before}
+                </div>
+            )}
+            {after && (
+                <div style={{ marginTop: before ? 4 : 0 }}>
+                    <span style={{ fontWeight: 500, color: '#555' }}>Sau: </span>
+                    {!before && isTruncated
+                        ? <>{after.slice(0, MAX_CHARS)}... </>
+                        : (before ? (after.length > MAX_CHARS ? <>{after.slice(0, MAX_CHARS)}... </> : after) : after)}
+                </div>
+            )}
+            {(isTruncated || (before && after)) && (
+                <button
+                    className="btn btn-link p-0"
+                    style={{ fontSize: 12 }}
+                    onClick={() => onViewMore(item)}
+                >
+                    Xem thêm
+                </button>
+            )}
+        </div>
+    );
+}
 
 var size = 3
 var url = '';
@@ -26,14 +67,13 @@ function LichDaDangKy(){
     const [pageCount, setpageCount] = useState(0);
     const [currentPage, setCurrentPage] = useState(0);
     const [item, setItem] = useState(null);
+    const [healthItem, setHealthItem] = useState(null);
 
     useEffect(()=>{
         const getItem= async() =>{
             var response = await getMethod('/api/customer-schedule/customer/my-schedule?&size='+size+'&sort=id,desc&page='+0);
             var result = await response.json();
-            
             setCustomerSchedule(result.content)
-            
             setpageCount(result.totalPages)
             url = '/api/customer-schedule/customer/my-schedule?&size='+size+'&sort=id,desc&page='
         };
@@ -51,7 +91,7 @@ function LichDaDangKy(){
         };
         getNurse();
     }, []);
-  
+
     async function huyTiem(id) {
         var con = window.confirm("Xác nhận hủy tiêm?");
         if(con == false){
@@ -76,10 +116,8 @@ function LichDaDangKy(){
         }
     }
 
-
     const handleRatingSelect = (ratingValue) => {
         setRating(ratingValue);
-        console.log('Rating được chọn:', ratingValue);
     };
 
     async function taoPhanHoi(event) {
@@ -135,6 +173,7 @@ function LichDaDangKy(){
         setCustomerSchedule(result.content)
         setpageCount(result.totalPages)
     }
+
     async function loadDuLieu(){
         url = '/api/customer-schedule/customer/my-schedule?&size='+size+'&sort=id,desc&page=';
         var response = await getMethod(url+0)
@@ -146,7 +185,6 @@ function LichDaDangKy(){
         document.getElementById("to").value = "";
     }
 
-    
     function momoClick(){
         document.getElementById("momo").click()
     }
@@ -193,12 +231,8 @@ function LichDaDangKy(){
         if (res.status == 417) {
             toast.warning(result.defaultMessage);
         }
-    
     }
 
-
-
-    
     return(
         <>
             <div class="tablediv">
@@ -238,6 +272,7 @@ function LichDaDangKy(){
                                 <th>Ngày tiêm</th>
                                 <th>Thanh toán</th>
                                 <th>Trạng thái</th>
+                                <th>Tình trạng SK</th>
                                 <th>Chức năng</th>
                                 <th>Phản hồi</th>
                                 <th>Hủy lịch</th>
@@ -251,7 +286,7 @@ function LichDaDangKy(){
                             if (currentDate.getTime() >= targetDate.getTime()) {
                                 checked = true;
                             }
-                            return <tr>
+                            return <tr key={item.id}>
                                 <td>{item.id}</td>
                                 <td>{item.vaccineScheduleTime.vaccineSchedule.vaccine.name}</td>
                                 <td>{item.vaccineScheduleTime.vaccineSchedule.center.centerName}</td>
@@ -266,6 +301,9 @@ function LichDaDangKy(){
                                     'finished': 'Hoàn thành',
                                     'not_injected': 'Chưa tiêm',
                                 }[item.statusCustomerSchedule] || item.statusCustomerSchedule}</td>
+                                <td style={{ minWidth: 160, maxWidth: 220 }}>
+                                    <HealthStatusCell item={item} onViewMore={setHealthItem} />
+                                </td>
                                 <td>
                                     {item.customerSchedulePay == 'CHUA_THANH_TOAN' ?
                                     <button onClick={()=>setItem(item)} data-bs-toggle="modal" data-bs-target="#modelthanhtoan" className='btn btn-primary btncommont'>Thanh toán</button>
@@ -281,7 +319,7 @@ function LichDaDangKy(){
                                 </td>
                                 <td>
                                     {
-                                    item.statusCustomerSchedule != 'cancelled' && item.statusCustomerSchedule != 'finished' && checked == false?
+                                    item.statusCustomerSchedule != 'cancelled' && item.statusCustomerSchedule != 'finished' && item.statusCustomerSchedule != 'injected' && item.statusCustomerSchedule != 'not_injected' && checked == false?
                                     <button onClick={()=>huyTiem(item.id)} className='btn btn-danger'>Hủy</button>:<></>
                                     }
                                 </td>
@@ -289,23 +327,25 @@ function LichDaDangKy(){
                          })}
                         </tbody>
                     </table>
-                    <ReactPaginate 
-                        marginPagesDisplayed={2} 
-                        pageCount={pageCount} 
+                    <ReactPaginate
+                        marginPagesDisplayed={2}
+                        pageCount={pageCount}
                         onPageChange={handlePageClick}
-                        containerClassName={'pagination'} 
-                        pageClassName={'page-item'} 
+                        containerClassName={'pagination'}
+                        pageClassName={'page-item'}
                         pageLinkClassName={'page-link'}
                         previousClassName='page-item'
                         previousLinkClassName='page-link'
                         nextClassName='page-item'
                         nextLinkClassName='page-link'
                         breakClassName='page-item'
-                        breakLinkClassName='page-link' 
+                        breakLinkClassName='page-link'
                         previousLabel='Trang trước'
                         nextLabel='Trang sau'
                         activeClassName='active'/>
                 </div>
+
+                {/* Modal gửi phản hồi */}
                 <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
                     <div class="modal-dialog modal-dialog-centered">
                         <div class="modal-content">
@@ -327,7 +367,7 @@ function LichDaDangKy(){
                                     }))}
                                     placeholder="Chọn bác sĩ tiêm"
                                     name='doctor'
-                                    isSearchable={true} 
+                                    isSearchable={true}
                                 />
                                 <label className='lb-form-dky-tiem'>Y tá</label>
                                 <Select
@@ -337,7 +377,7 @@ function LichDaDangKy(){
                                     }))}
                                     placeholder="Chọn y tá"
                                     name='yta'
-                                    isSearchable={true} 
+                                    isSearchable={true}
                                 />
                                 <br/><br/>
                                 <button className='btn btn-primary form-control'>Gửi phản hồi</button>
@@ -347,6 +387,7 @@ function LichDaDangKy(){
                     </div>
                 </div>
 
+                {/* Modal thanh toán */}
                 <div class="modal fade" id="modelthanhtoan" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
                     <div class="modal-dialog modal-dialog-centered">
                         <div class="modal-content">
@@ -357,24 +398,92 @@ function LichDaDangKy(){
                         <form onSubmit={dangKyTiem}  class="modal-body">
                             <table class="table tablepay">
                                 <tr onClick={momoClick}>
-                                    <td><label class="radiocustom">	<p>Thanh toán qua Ví MoMo</p>
+                                    <td><label class="radiocustom"><p>Thanh toán qua Ví MoMo</p>
                                             <input value="momo" id="momo" type="radio" name="paytype"/>
                                             <span class="checkmark"></span></label></td>
                                     <td><img src={momo} class="momopay"/></td>
                                 </tr>
                                 <tr onClick={vnpayClick}>
-                                    <td><label class="radiocustom">	<p>Thanh toán qua Ví Vnpay</p>
+                                    <td><label class="radiocustom"><p>Thanh toán qua Ví Vnpay</p>
                                             <input value="vnpay" id="vnpay" type="radio" name="paytype"/>
                                             <span class="checkmark"></span></label></td>
                                     <td><img src={vnpay} class="momopay"/></td>
                                 </tr>
-
                             </table>
                             <button className='btn btn-primary form-control'>Thanh toán</button>
                         </form>
                         </div>
                     </div>
                 </div>
+
+                {/* Modal xem tình trạng sức khỏe đầy đủ */}
+                {healthItem && (
+                    <div
+                        class="modal fade show"
+                        style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.4)' }}
+                        tabindex="-1"
+                        onClick={() => setHealthItem(null)}
+                    >
+                        <div class="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        Tình trạng sức khỏe — Mã đăng ký #{healthItem.id}
+                                    </h5>
+                                    <button
+                                        type="button"
+                                        class="btn-close"
+                                        onClick={() => setHealthItem(null)}
+                                    ></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div style={{ marginBottom: 16 }}>
+                                        <p style={{ fontWeight: 600, marginBottom: 6, color: '#1890ff' }}>
+                                            Tình trạng trước tiêm
+                                        </p>
+                                        <div style={{
+                                            background: '#f6f6f6',
+                                            borderRadius: 6,
+                                            padding: '10px 14px',
+                                            minHeight: 48,
+                                            color: healthItem.healthStatusBefore ? '#333' : '#aaa',
+                                            whiteSpace: 'pre-wrap',
+                                            lineHeight: 1.6
+                                        }}>
+                                            {healthItem.healthStatusBefore || 'Chưa có thông tin'}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p style={{ fontWeight: 600, marginBottom: 6, color: '#52c41a' }}>
+                                            Tình trạng sau tiêm
+                                        </p>
+                                        <div style={{
+                                            background: '#f6f6f6',
+                                            borderRadius: 6,
+                                            padding: '10px 14px',
+                                            minHeight: 48,
+                                            color: healthItem.healthStatusAfter ? '#333' : '#aaa',
+                                            whiteSpace: 'pre-wrap',
+                                            lineHeight: 1.6
+                                        }}>
+                                            {healthItem.healthStatusAfter || 'Chưa có thông tin'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button
+                                        type="button"
+                                        class="btn btn-secondary"
+                                        onClick={() => setHealthItem(null)}
+                                    >
+                                        Đóng
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <DoiLich customerSchedule={item}/>
             </div>
         </>

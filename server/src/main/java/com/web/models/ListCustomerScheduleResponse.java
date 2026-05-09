@@ -1,5 +1,7 @@
 package com.web.models;
 
+import com.web.entity.Doctor;
+import com.web.entity.Nurse;
 import com.web.entity.Payment;
 import com.web.entity.User;
 import com.web.entity.VaccineSchedule;
@@ -29,5 +31,8 @@ public class ListCustomerScheduleResponse {
     private String fullName;
     private String healthStatusBefore;
     private String healthStatusAfter;
+    private Timestamp completedDate;
+    private Doctor doctor;
+    private Nurse nurse;
 
 }

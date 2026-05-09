@@ -7,6 +7,7 @@ import com.web.enums.StatusCustomerSchedule;
 import com.web.exception.MessageException;
 import com.web.repository.CustomerScheduleRepository;
 import com.web.repository.VaccineRepository;
+import com.web.utils.EmailTemplateUtils;
 import com.web.utils.MailService;
 import com.web.utils.UserUtils;
 import com.web.entity.User;
@@ -162,23 +163,11 @@ public class VaccinePersonalizationService {
                         .getVaccineSchedule().getVaccine().getName();
                 String injectDate = schedule.getVaccineScheduleTime().getInjectDate().toString();
 
-                String subject = "Nhắc nhở: Lịch tiêm vaccine sắp đến!";
-                String body = String.format(
-                        "Kính chào %s,\n\n" +
-                        "Đây là email nhắc nhở lịch tiêm vaccine của bạn:\n" +
-                        "- Vaccine: %s\n" +
-                        "- Ngày tiêm: %s\n" +
-                        "- Thời gian: %s - %s\n\n" +
-                        "Vui lòng đến đúng giờ để được phục vụ tốt nhất.\n\n" +
-                        "Trân trọng,\nHệ thống Tiêm phòng",
-                        schedule.getFullName(),
-                        vaccineName,
-                        injectDate,
-                        schedule.getVaccineScheduleTime().getStart(),
-                        schedule.getVaccineScheduleTime().getEnd()
-                );
-
-                mailService.sendEmail(userEmail, subject, body, false, false);
+                String customerName = schedule.getFullName() != null ? schedule.getFullName() : userEmail;
+                String timeSlot = schedule.getVaccineScheduleTime().getStart() + " - " + schedule.getVaccineScheduleTime().getEnd();
+                String _htmlReminder = EmailTemplateUtils.bookingConfirmation(
+                        customerName, vaccineName, injectDate, timeSlot, "iVaccine");
+                mailService.sendEmail(userEmail, "[iVaccine] Nhắc nhở lịch tiêm vaccine hôm nay", _htmlReminder, false, true);
             } catch (Exception e) {
                 // Silent fail: không để lỗi 1 user làm gián đoạn reminder của user khác
                 System.err.println("[Reminder] Lỗi gửi email cho user: "

@@ -6,6 +6,7 @@ import com.web.dto.PaymentRequest;
 import com.web.entity.CustomerSchedule;
 import com.web.entity.VaccineSchedule;
 import com.web.models.ApproveCustomerScheduleRequest;
+import com.web.models.AssignDoctorNurseRequest;
 import com.web.models.CreateScheduleGuestRequest;
 import com.web.models.ListCustomerScheduleRequest;
 import com.web.service.CustomerScheduleService;
@@ -102,5 +103,24 @@ public class CustomerScheduleApi {
     @PostMapping("/customer/update-customer-schedule")
     public ResponseEntity<?> createCustomerFindByIdSchedule(@RequestBody UpdateCustomerSchedule request) {
         return new ResponseEntity<>(customerScheduleService.updateCustomerSchedule(request),HttpStatus.OK);
+    }
+
+    // Nhân viên phân công bác sĩ / y tá cho lịch tiêm
+    @PostMapping("/staff/assign-doctor-nurse")
+    public ResponseEntity<?> assignDoctorNurse(@RequestBody AssignDoctorNurseRequest request) {
+        customerScheduleService.assignDoctorNurse(request);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    // Bác sĩ xem danh sách bệnh nhân được phân công
+    @PostMapping("/doctor/my-patients")
+    public ResponseEntity<?> doctorPatients(@RequestBody ListCustomerScheduleRequest request) {
+        return new ResponseEntity<>(customerScheduleService.listCustomerScheduleForDoctor(request), HttpStatus.OK);
+    }
+
+    // Y tá xem danh sách bệnh nhân được phân công
+    @PostMapping("/nurse/my-patients")
+    public ResponseEntity<?> nursePatients(@RequestBody ListCustomerScheduleRequest request) {
+        return new ResponseEntity<>(customerScheduleService.listCustomerScheduleForNurse(request), HttpStatus.OK);
     }
 }
