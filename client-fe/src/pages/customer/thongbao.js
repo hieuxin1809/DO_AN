@@ -1,5 +1,5 @@
 import Footer from '../../layout/customer/footer/footer'
-import logomini from '../../assest/images/vaxmslogo3.png'
+import logomini from '../../assest/images/ivaccine-logo.jpg'
 
 import { useState, useEffect } from 'react'
 import { Parser } from "html-to-react";

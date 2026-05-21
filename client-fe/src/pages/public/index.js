@@ -27,25 +27,12 @@ function Home(){
     const [itemType, setItemType] = useState([]);
     const [itemNews, setItemNews] = useState([]);
     const [doctors, setDoctors] = useState([]);
-    const [visibleCounts, setVisibleCounts] = useState({});
-
-    const handleShowMore = (index) => {
-        setVisibleCounts((prevCounts) => ({
-            ...prevCounts,
-            [index]: prevCounts[index] + 4,
-        }));
-    };
 
     useEffect(()=>{
         const getItemType = async () => {
             const response = await getMethod('/api/vaccine/public/vaccine-type');
             const result = await response.json();
             setItemType(result);
-            const initialCounts = result.reduce((acc, _, index) => {
-                acc[index] = 4;
-                return acc;
-            }, {});
-            setVisibleCounts(initialCounts);
         };
         getItemType();
 
@@ -281,55 +268,85 @@ function Home(){
             </div>
 
             {/* ═══════════════════════════════════════════════
-                VACCINE TYPES
+                VACCINE CATEGORIES
             ═══════════════════════════════════════════════ */}
-            <div style={{ background:'#fff', padding:'72px 24px' }}>
+            <div style={{ background:'#f8fafc', padding:'72px 24px' }}>
                 <div style={{ maxWidth:'1200px', margin:'0 auto' }}>
-                    {itemType.map((item, itemIndex) => (
-                        <div key={itemIndex} style={{ marginBottom:'64px' }}>
-                            <SectionHeader
-                                title={item.vaccineType.typeName}
-                                sub={null}
-                                align="left"
-                                accent={PRIMARY_L}
-                            />
-                            <div style={{
-                                display:'grid',
-                                gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',
-                                gap:'20px',
-                                marginTop:'32px',
-                            }}>
-                                {item.vaccines.slice(0, visibleCounts[itemIndex] || 0).map((vaccine, vaccineIndex) => (
-                                    <VaccineCard key={vaccineIndex} vaccine={vaccine}/>
-                                ))}
-                            </div>
-
-                            {visibleCounts[itemIndex] < item.vaccines.length && (
-                                <div style={{ textAlign:'center', marginTop:'32px' }}>
-                                    <button
-                                        onClick={() => handleShowMore(itemIndex)}
-                                        style={{
-                                            padding:'10px 32px',
-                                            border:`1px solid ${PRIMARY_L}`,
-                                            borderRadius:'30px',
-                                            background:'#fff',
-                                            color: PRIMARY_L,
-                                            fontWeight:'600',
-                                            fontSize:'14px',
-                                            cursor:'pointer',
-                                            transition:'all 0.2s',
-                                        }}
-                                        onMouseOver={e=>{e.currentTarget.style.background=PRIMARY_L; e.currentTarget.style.color='#fff';}}
-                                        onMouseOut={e=>{e.currentTarget.style.background='#fff'; e.currentTarget.style.color=PRIMARY_L;}}
-                                    >
-                                        Xem thêm vaccine ↓
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                    <SectionHeader
+                        label="Danh mục vaccine"
+                        title="Chọn loại vaccine phù hợp"
+                        sub="Khám phá đầy đủ các danh mục vaccine cho mọi lứa tuổi, nhu cầu và mùa dịch."
+                    />
+                    <div style={{
+                        display:'grid',
+                        gridTemplateColumns:'repeat(auto-fill,minmax(175px,1fr))',
+                        gap:'20px',
+                        marginTop:'48px',
+                    }}>
+                        {itemType.map((cat, i) => (
+                            <CategoryCard key={i} cat={cat} colorIndex={i}/>
+                        ))}
+                    </div>
                 </div>
             </div>
+
+            {/* ═══════════════════════════════════════════════
+                FEATURED VACCINES
+            ═══════════════════════════════════════════════ */}
+            {itemType.length > 0 && (
+                <div style={{ background:'#fff', padding:'72px 24px' }}>
+                    <div style={{ maxWidth:'1200px', margin:'0 auto' }}>
+                        <SectionHeader
+                            label="Vaccine nổi bật"
+                            title="Được đặt nhiều nhất"
+                            sub="Các loại vaccine phổ biến được hàng nghìn khách hàng tin tưởng lựa chọn tại iVaccine."
+                        />
+                        <div style={{ marginTop:'48px', paddingBottom:'16px' }}>
+                            <Swiper
+                                modules={[Navigation, Pagination, Autoplay]}
+                                spaceBetween={20}
+                                slidesPerView={4}
+                                breakpoints={{
+                                    320: { slidesPerView:1, spaceBetween:16 },
+                                    600: { slidesPerView:2, spaceBetween:16 },
+                                    900: { slidesPerView:3, spaceBetween:20 },
+                                    1200:{ slidesPerView:4, spaceBetween:20 },
+                                }}
+                                loop={true}
+                                pagination={{ clickable:true }}
+                                navigation={true}
+                                autoplay={{ delay:3200, disableOnInteraction:false }}
+                            >
+                                {itemType
+                                    .flatMap(cat => cat.vaccines)
+                                    .slice(0, 16)
+                                    .map((vaccine, i) => (
+                                        <SwiperSlide key={i}>
+                                            <VaccineCard vaccine={vaccine}/>
+                                        </SwiperSlide>
+                                    ))
+                                }
+                            </Swiper>
+                        </div>
+                        <div style={{ textAlign:'center', marginTop:'8px' }}>
+                            <a
+                                href="/tim-kiem-vaccine"
+                                style={{
+                                    display:'inline-flex', alignItems:'center', gap:'8px',
+                                    border:`2px solid ${PRIMARY_L}`, color:PRIMARY_L,
+                                    textDecoration:'none', padding:'12px 32px',
+                                    borderRadius:'30px', fontWeight:'700', fontSize:'14px',
+                                    transition:'all 0.2s', background:'transparent',
+                                }}
+                                onMouseOver={e=>{e.currentTarget.style.background=PRIMARY_L; e.currentTarget.style.color='#fff';}}
+                                onMouseOut={e=>{e.currentTarget.style.background='transparent'; e.currentTarget.style.color=PRIMARY_L;}}
+                            >
+                                Xem tất cả vaccine →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ═══════════════════════════════════════════════
                 DOCTORS
@@ -627,11 +644,75 @@ function FeatureCard({ icon, color, bg, title, desc }) {
     );
 }
 
+const CAT_COLORS = [
+    { bg:'#dbeafe', color:'#1d4ed8', icon:'💉' },
+    { bg:'#d1fae5', color:'#065f46', icon:'🛡️' },
+    { bg:'#ede9fe', color:'#6d28d9', icon:'👶' },
+    { bg:'#fef3c7', color:'#92400e', icon:'🌍' },
+    { bg:'#fee2e2', color:'#991b1b', icon:'❤️' },
+    { bg:'#fce7f3', color:'#9d174d', icon:'🏥' },
+    { bg:'#e0f2fe', color:'#0369a1', icon:'🧬' },
+    { bg:'#dcfce7', color:'#166534', icon:'🌿' },
+];
+
+function CategoryCard({ cat, colorIndex }) {
+    const [hover, setHover] = useState(false);
+    const c = CAT_COLORS[colorIndex % CAT_COLORS.length];
+    const typeId = cat.vaccineType?.id;
+    return (
+        <a
+            href={`/vaccine-danhmuc?danhmuc=${typeId}`}
+            style={{ textDecoration:'none' }}
+            onMouseOver={()=>setHover(true)}
+            onMouseOut={()=>setHover(false)}
+        >
+            <div style={{
+                background:'#fff',
+                borderRadius:'16px',
+                padding:'26px 18px',
+                textAlign:'center',
+                border: hover ? `1.5px solid ${c.color}` : '1.5px solid #f1f5f9',
+                boxShadow: hover
+                    ? `0 8px 24px rgba(0,0,0,0.1), 0 0 0 3px ${c.bg}`
+                    : '0 2px 8px rgba(0,0,0,0.05)',
+                transform: hover ? 'translateY(-5px)' : 'none',
+                transition:'all 0.25s',
+                cursor:'pointer',
+                height:'100%',
+            }}>
+                <div style={{
+                    width:'60px', height:'60px', borderRadius:'16px',
+                    background: c.bg, display:'flex',
+                    alignItems:'center', justifyContent:'center',
+                    fontSize:'28px', margin:'0 auto 14px',
+                }}>
+                    {c.icon}
+                </div>
+                <h3 style={{
+                    fontSize:'14px', fontWeight:'700', color:'#1e293b',
+                    marginBottom:'10px', lineHeight:'1.4', minHeight:'38px',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                }}>
+                    {cat.vaccineType?.typeName}
+                </h3>
+                <span style={{
+                    display:'inline-block',
+                    background: c.bg, color: c.color,
+                    borderRadius:'20px', padding:'3px 12px',
+                    fontSize:'12px', fontWeight:'700',
+                }}>
+                    {cat.vaccines?.length || 0} loại vaccine
+                </span>
+            </div>
+        </a>
+    );
+}
+
 function VaccineCard({ vaccine }) {
     const [hover, setHover] = useState(false);
     return (
         <a
-            href={"thong-tin-vaccine?id="+vaccine.id}
+            href={"/thong-tin-vaccine?id="+vaccine.id}
             style={{ textDecoration:'none' }}
             onMouseOver={()=>setHover(true)}
             onMouseOut={()=>setHover(false)}

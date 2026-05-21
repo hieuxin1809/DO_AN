@@ -9,8 +9,9 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class PlusVaccineRequest {
-    private String name;
-    private Integer quantity;
+public class CreateVaccineInventoryRequest {
+    private Long vaccineId;
     private Long centerId;
+    private Integer quantity;
+    private String expirationDate; // format: yyyy-MM-dd
 }

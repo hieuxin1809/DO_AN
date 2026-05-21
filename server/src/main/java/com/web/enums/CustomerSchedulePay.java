@@ -7,5 +7,5 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum CustomerSchedulePay {
 
-    THANH_TOAN_MOMO, THANH_TOAN_VNPAY, CHUA_THANH_TOAN
+    THANH_TOAN_MOMO, THANH_TOAN_VNPAY, THANH_TOAN_PAYPAL, CHUA_THANH_TOAN
 }

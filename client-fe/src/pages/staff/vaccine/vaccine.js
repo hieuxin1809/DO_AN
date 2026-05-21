@@ -1,345 +1,275 @@
-import React, { useEffect, useRef, useState } from "react";
-import {
-  Button,
-  Card,
-  Col,
-  DatePicker,
-  Input,
-  InputNumber,
-  Pagination,
-  Popconfirm,
-  Row,
-  Select,
-  Table,
-  
-  Tag,
-} from "antd";
-import { VaccineApi } from "../../../services/staff/Vaccine.api";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit, faFilter, faListAlt, faTrash } from "@fortawesome/free-solid-svg-icons";
-import dayjs from "dayjs";
-import ModalHandle from "./modal/modalHandle";
-import { AppNotification } from "../../../components/AppNotification";
-import * as XLSX from "xlsx";
-import { faAdd } from "@fortawesome/free-solid-svg-icons/faAdd";
-import "./style.css";
+import React, { useEffect, useRef, useState } from 'react';
+import { VaccineApi } from '../../../services/staff/Vaccine.api';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faEdit, faTrash, faSyringe, faPlus, faSearch, faFileExcel, faUpload, faX } from '@fortawesome/free-solid-svg-icons';
+import dayjs from 'dayjs';
+import Swal from 'sweetalert2';
+import { AppNotification } from '../../../components/AppNotification';
+import * as XLSX from 'xlsx';
 
-const { RangePicker } = DatePicker;
-const { Option } = Select;
+const P = '#2A388F', A = '#0ea5e9', S = '#10b981', D = '#ef4444', W = '#f59e0b';
+const B = '#e2e8f0', T = '#1e293b', T2 = '#64748b';
+
+const pgCSS = `
+.pg-vac{display:flex;gap:6px;list-style:none;padding:0;margin:0;flex-wrap:wrap;align-items:center}
+.pg-vac button{display:flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 10px;border-radius:8px;border:1.5px solid #e2e8f0;color:#64748b;font-size:13px;font-weight:600;cursor:pointer;background:#fff;transition:all .15s}
+.pg-vac button:hover{border-color:#2A388F;color:#2A388F;background:#eff6ff}
+.pg-vac button.active{background:linear-gradient(135deg,#2A388F,#0ea5e9);border-color:#2A388F;color:#fff}
+.pg-vac button:disabled{opacity:.4;cursor:not-allowed}
+`;
+
+const formatMoney = (v) => v != null ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v) : '—';
 
 const Vaccine = () => {
-  const [modalHandle, setModalHandle] = useState({
-    status: false,
-    id: "",
-  });
   const fileInputRef = useRef(null);
-  const [total, setTotal] = useState(0);
+  const [total,       setTotal]       = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [vaccines, setVaccines] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [formSearch, setFormSearch] = useState({
-    name: "",
-    price: "",
-    manufacturer: "",
-    page: 1,
-    limit: 10,
-  });
+  const [pageSize,    setPageSize]    = useState(10);
+  const [vaccines,    setVaccines]    = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [formSearch,  setFormSearch]  = useState({ name: '', price: '', manufacturer: '', page: 1, limit: 10 });
 
-  useEffect(() => {
-    handleGetVaccines(formSearch);
-  }, [formSearch]);
-  useEffect(() => {
-    handleGetVaccines({ ...formSearch, page: currentPage, limit: pageSize });
-  }, [currentPage, pageSize]);
+  const totalPages = Math.ceil(total / pageSize);
 
-  // Lấy danh sách vaccine
-  const handleGetVaccines = async (formSearch) => {
+  useEffect(() => { handleGetVaccines(formSearch); }, [formSearch]);
+  useEffect(() => { handleGetVaccines({ ...formSearch, page: currentPage, limit: pageSize }); }, [currentPage, pageSize]);
+
+  const handleGetVaccines = async (params) => {
     setLoading(true);
-    
-    await VaccineApi.vaccines(formSearch)
-      .then((res) => {
-        setTotal(res.data.totalElements);
-        setCurrentPage(res.data.pageable.pageNumber + 1);
-        setPageSize(res.data.size);
-        const dataVaccines = res.data.content;
-        setVaccines(updatedList(dataVaccines, formSearch.page, formSearch.limit));
-        setTimeout(() => {
-          setLoading(false);
-        }, 500);
+    try {
+      const res = await VaccineApi.vaccines(params);
+      setTotal(res.data.totalElements);
+      setCurrentPage(res.data.pageable.pageNumber + 1);
+      setPageSize(res.data.size);
+      setVaccines(
+        res.data.content.map((item, i) => ({ ...item, stt: (params.page - 1) * params.limit + i + 1 }))
+      );
+    } catch (err) { console.error(err); }
+    finally { setTimeout(() => setLoading(false), 300); }
+  };
+
+  const handleDelete = async (id, name) => {
+    const { isConfirmed } = await Swal.fire({
+      title: 'Xóa vaccine?', html: `Bạn có chắc muốn xóa <strong>${name}</strong>?`,
+      icon: 'warning', showCancelButton: true,
+      confirmButtonColor: D, confirmButtonText: 'Xóa', cancelButtonText: 'Hủy',
+    });
+    if (!isConfirmed) return;
+    VaccineApi.deleteVaccine({ id })
+      .then(() => {
+        setVaccines(v => v.filter(x => x.id !== id));
+        AppNotification.success('Xóa thành công');
       })
-      .catch((err) => {
-        console.log(err);
+      .catch(err => {
+        const msg = err?.response?.data?.defaultMessage;
+        AppNotification.error(msg || 'Xóa thất bại');
       });
   };
 
-  const updatedList = (data, currentPage, pageSize) => {
-    return data.map((item, index) => ({
-      ...item,
-      stt: (currentPage - 1) * pageSize + index + 1,
-    }));
-  };
-
-  // Xóa vaccine
-  const handleDelete = (id) => {
-    VaccineApi.deleteVaccine({ id: id })
-      .then((res) => {
-        setVaccines(vaccines.filter((item) => item.id !== id));
-        AppNotification.success("Xóa thành công");
-      })
-      .catch((err) => {
-        const errorMessage = err.response.data.defaultMessage || null;
-        if (errorMessage) {
-          AppNotification.error(errorMessage);
-        }
-      });
-  };
-
-  // Chuyển trang
-  const onPageChange = (page, pageSize) => {
-    setCurrentPage(page);
-    setPageSize(pageSize);
-  };
-
-  // Xử lý file import
   const handleFileChange = (e) => {
-    const fileUpload = e.target.files[0];
-    if (!fileUpload) {
-      AppNotification.error("Vui lòng chọn file");
-      return;
-    }
+    const file = e.target.files[0];
+    if (!file) { AppNotification.error('Vui lòng chọn file'); return; }
     const formData = new FormData();
-    formData.append("file", fileUpload);
-
+    formData.append('file', file);
     VaccineApi.importVaccine(formData)
-      .then((response) => {
-        AppNotification.success("Nhập dữ liệu thành công");
-        handleGetVaccines(formSearch);
-      })
-      .catch((err) => {
-        const message = err.response.data.defaultMessage;
-        if (message) {
-          AppNotification.error(message);
-          return;
-        }
-        AppNotification.error("Nhập dữ liệu không thành công");
+      .then(() => { AppNotification.success('Nhập dữ liệu thành công'); handleGetVaccines(formSearch); })
+      .catch(err => {
+        const msg = err?.response?.data?.defaultMessage;
+        AppNotification.error(msg || 'Nhập dữ liệu không thành công');
       });
   };
 
-  const handleIconClick = () => {
-    fileInputRef.current.click();
-  };
-
-  // Xuất dữ liệu ra file Excel
   const handleExport = () => {
     try {
-      const formattedData = vaccines.map((item, index) => ({
-        STT: index + 1,
-        "Tên Vaccine": item?.name,
-        "Số lượng Vaccine": item?.inventory,
-        Giá: item?.price,
-        "Loại Vaccine": item?.vaccineType?.typeName,
-        "Độ tuổi": item?.ageGroup?.ageRange,
-        "Nhà sản xuất": item?.manufacturer?.name,
-        "Ngày tạo": item?.createdDate
-          ? dayjs(item?.createdDate).format("HH:mm:ss DD-MM-YYYY")
-          : null,
-        "Trạng thái": item?.status === "ACTIVE" ? "Kinh doanh" : "Ngừng kinh doanh",
+      const data = vaccines.map((item, i) => ({
+        STT: i + 1,
+        'Tên Vaccine': item?.name,
+        'Số lượng': item?.inventory,
+        'Giá': item?.price,
+        'Loại Vaccine': item?.vaccineType?.typeName,
+        'Độ tuổi': item?.ageGroup?.ageRange,
+        'Nhà sản xuất': item?.manufacturer?.name,
+        'Ngày tạo': item?.createdDate ? dayjs(item.createdDate).format('HH:mm:ss DD-MM-YYYY') : null,
+        'Trạng thái': item?.status === 'ACTIVE' ? 'Kinh doanh' : 'Ngừng kinh doanh',
       }));
-      const worksheet = XLSX.utils.json_to_sheet(formattedData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-      XLSX.writeFile(workbook, "vaccine_data.xlsx");
-      AppNotification.success("Xuất dữ liệu thành công");
-    } catch (error) {
-      AppNotification.error("Xuất dữ liệu không thành công");
-    }
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Data');
+      XLSX.writeFile(wb, 'vaccine_data.xlsx');
+      AppNotification.success('Xuất dữ liệu thành công');
+    } catch { AppNotification.error('Xuất dữ liệu không thành công'); }
   };
 
-  // Cột của bảng
-  const columns = [
-    {
-      title: "STT",
-      dataIndex: "stt",
-      key: "stt",
-    },
-    {
-      title: "Tên Vaccine",
-      dataIndex: "nameVaccine",
-      key: "name1",
-    },
-    {
-      title: "Giá",
-      dataIndex: "price",
-      key: "price",
-      sorter: (a, b) => a.price - b.price,
-      render: (price) => new Intl.NumberFormat('vi-VN').format(price),
+  const manuOptions = ['', 'Pfizer', 'Moderna', 'AstraZeneca'];
 
-    },
-    {
-      title: "Số lượng",
-      dataIndex: "inventory",
-      key: "inventory",
-      sorter: (a, b) => a.inventory - b.inventory,
-      render: (inventory) => inventory,
-    },
-    {
-      title: "Loại vaccine",
-      dataIndex: "vaccineType",
-      key: "vaccineType",
-      align: "center",
-      render: (_, record) => <div>{record?.vaccineType?.typeName}</div>,
-    },
-    {
-      title: "Nhà sản xuất",
-      dataIndex: "manufacturer",
-      key: "manufacturer",
-      align: "center",
-      render: (_, record) => <div>{record?.manufacturer?.name}</div>,
-    },
-    {
-      title: "Độ tuổi",
-      dataIndex: "ageGroup",
-      key: "ageGroup",
-      align: "center",
-      render: (_, record) => <div>{record?.ageGroup?.ageRange}</div>,
-    },
-    {
-      title: "Ngày nhập hàng",
-      dataIndex: "createdDate",
-      key: "createdDate",
-      align: "center",
-      render: (date) => dayjs(date).format("DD-MM-YYYY"),
-    },
-    {
-      title: "Hành động",
-      dataIndex: "hanhDong",
-      key: "hanhDong",
-      align: "center",
-      render: (text, record) => (
-        <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
-          {/* <Button
-            type="primary"
-            title="Chỉnh sửa thể loại"
-            style={{ backgroundColor: "green", borderColor: "green" }}
-            onClick={() =>
-              setModalHandle({
-                ...modalHandle,
-                status: true,
-                id: record.id,
-                type: "update",
-              })
-            }
-          >
-            <FontAwesomeIcon icon={faEdit} />
-          </Button> */}
-          <a href={"add-vaccine?id="+record.id} className="btn btn-primary"><i className="fa fa-edit"></i></a>
-          <Popconfirm
-            title="Thông báo"
-            description="Bạn có chắc chắn muốn xóa không?"
-            onConfirm={() => handleDelete(record.id)}
-            okText="Có"
-            cancelText="Không"
-          >
-            <Button
-              type="primary"
-              title="Xóa"
-              style={{ backgroundColor: "red", borderColor: "red" }}
-            >
-              <FontAwesomeIcon icon={faTrash} />
-            </Button>
-          </Popconfirm>
-        </div>
-      ),
-    },
-  ];
-
-  const manufacturerOptions = [
-    { label: "Tất cả", value: "" },
-    { label: "Pfizer", value: "Pfizer" },
-    { label: "Moderna", value: "Moderna" },
-    { label: "AstraZeneca", value: "AstraZeneca" },
-  ];
   return (
-    <React.Fragment>
-      <h3>Quản lý Vaccine</h3>
-      <Card>
-        <div className="filter-container">
-          <FontAwesomeIcon icon={faFilter} size="2x" />
-          <span style={{ fontSize: "18px", fontWeight: "500" }}>Bộ lọc</span>
+    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <style>{pgCSS}</style>
+
+      {/* ── header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg,${P},${A})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 14px rgba(42,56,143,.3)` }}>
+            <FontAwesomeIcon icon={faSyringe} style={{ color: '#fff', fontSize: 20 }} />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: T }}>Quản lý Vaccine</h2>
+            <div style={{ fontSize: 13, color: T2 }}>Tổng {total} vaccine trong hệ thống</div>
+          </div>
         </div>
-        <Row justify="space-between">
-          <Col span={10}>
-            <Input
-              style={{ width: "100%", height: 40, marginBottom: "30px" }}
-              placeholder="Tìm theo tên"
-              onChange={(e) => setFormSearch({ ...formSearch, name: e.target.value })}
-            />
-            <InputNumber
-              style={{ width: "100%", height: 40 }}
-              placeholder="Tìm theo giá"
-              onChange={(value) => setFormSearch({ ...formSearch, price: value })}
-              type="number"
-            />
-          </Col>
-          <Col span={10}>
-            <RangePicker
-              style={{ width: "100%", height: 40, marginBottom: "30px" }}
-              format="YYYY-MM-DD"
-              onChange={(dates, dateStrings) =>
-                setFormSearch({ ...formSearch, startDate: dateStrings[0], endDate: dateStrings[1] })
-              }
-            />
-            <Select
-              showSearch
-              style={{ width: "100%", height: 40 }}
-              optionFilterProp="children"
-              onChange={(value) => setFormSearch({ ...formSearch, manufacturer: value })}
-              filterOption={(input, option) =>
-                option.children.toLowerCase().includes(input.toLowerCase())
-              }
-              value={formSearch.manufacturer}
-            >
-              {manufacturerOptions.map((manufacturer) => (
-                <Option key={manufacturer.value} value={manufacturer.value}>
-                  {manufacturer.label}
-                </Option>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={() => fileInputRef.current?.click()} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px',
+            borderRadius: 10, border: `1.5px solid ${B}`, background: '#fff', color: T2,
+            fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
+          }}>
+            <FontAwesomeIcon icon={faUpload} /> Import
+          </button>
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFileChange} />
+          <button onClick={handleExport} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px',
+            borderRadius: 10, border: `1.5px solid ${S}22`, background: `${S}11`, color: S,
+            fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
+          }}>
+            <FontAwesomeIcon icon={faFileExcel} /> Export
+          </button>
+          <a href="add-vaccine" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px',
+            borderRadius: 10, textDecoration: 'none', fontWeight: 700, fontSize: 14,
+            color: '#fff', background: `linear-gradient(135deg,${P},${A})`,
+            boxShadow: `0 4px 14px rgba(42,56,143,.3)`,
+          }}>
+            <FontAwesomeIcon icon={faPlus} /> Thêm mới
+          </a>
+        </div>
+      </div>
+
+      {/* ── filters ── */}
+      <div style={{ background: '#fff', borderRadius: 14, padding: '16px 20px', marginBottom: 18,
+        border: `1px solid ${B}`, boxShadow: '0 1px 6px rgba(0,0,0,.04)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1.5px solid ${B}`, borderRadius: 9, padding: '7px 12px' }}>
+            <FontAwesomeIcon icon={faSearch} style={{ color: T2, fontSize: 13 }} />
+            <input placeholder="Tìm theo tên vaccine..."
+              style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13.5, color: T, background: 'transparent' }}
+              onChange={e => setFormSearch(f => ({ ...f, name: e.target.value, page: 1 }))} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1.5px solid ${B}`, borderRadius: 9, padding: '7px 12px' }}>
+            <input type="number" placeholder="Tìm theo giá..."
+              style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13.5, color: T, background: 'transparent' }}
+              onChange={e => setFormSearch(f => ({ ...f, price: e.target.value, page: 1 }))} />
+          </div>
+          <select style={{ border: `1.5px solid ${B}`, borderRadius: 9, padding: '8px 12px', fontSize: 13.5, color: T, outline: 'none', background: '#fff' }}
+            value={formSearch.manufacturer}
+            onChange={e => setFormSearch(f => ({ ...f, manufacturer: e.target.value, page: 1 }))}>
+            <option value="">Tất cả nhà sản xuất</option>
+            {manuOptions.slice(1).map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* ── table ── */}
+      <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden', border: `1px solid ${B}`, boxShadow: '0 2px 12px rgba(0,0,0,.06)' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                {['#','Tên Vaccine','Giá','Số lượng','Loại','Nhà sản xuất','Độ tuổi','Ngày nhập','Trạng thái','Hành động'].map(h => (
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11.5, fontWeight: 700,
+                    color: T2, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: `1px solid ${B}`, whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={10} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
+              ) : vaccines.length === 0 ? (
+                <tr><td colSpan={10} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có vaccine nào</td></tr>
+              ) : vaccines.map((item) => (
+                <tr key={item.id} style={{ borderBottom: `1px solid ${B}`, transition: 'background .15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <td style={{ padding: '13px 16px', color: T2, fontWeight: 600, fontSize: 13 }}>{item.stt}</td>
+                  <td style={{ padding: '13px 16px' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: T }}>{item.nameVaccine || item.name}</div>
+                      {item.status === 'INACTIVE' && (
+                        <span style={{ fontSize: 11, color: D, background: `${D}11`, padding: '1px 7px', borderRadius: 10, whiteSpace: 'nowrap' }}>Ngừng kinh doanh</span>
+                      )}
+                    </div>
+                  </td>
+                  <td style={{ padding: '13px 16px', color: S, fontWeight: 700, fontSize: 13 }}>{formatMoney(item.price)}</td>
+                  <td style={{ padding: '13px 16px', fontWeight: 700, color: item.inventory > 0 ? T : D }}>{item.inventory ?? '—'}</td>
+                  <td style={{ padding: '13px 16px' }}>
+                    {item.vaccineType?.typeName ? (
+                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                        background: `rgba(42,56,143,.08)`, color: P }}>{item.vaccineType.typeName}</span>
+                    ) : <span style={{ color: T2 }}>—</span>}
+                  </td>
+                  <td style={{ padding: '13px 16px', color: T2, fontSize: 13 }}>{item.manufacturer?.name || '—'}</td>
+                  <td style={{ padding: '13px 16px', color: T2, fontSize: 13 }}>{item.ageGroup?.ageRange || '—'}</td>
+                  <td style={{ padding: '13px 16px', color: T2, fontSize: 13 }}>
+                    {item.createdDate ? dayjs(item.createdDate).format('DD/MM/YYYY') : '—'}
+                  </td>
+                  <td style={{ padding: '13px 16px' }}>
+                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
+                      background: item.status === 'ACTIVE' ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.1)',
+                      color: item.status === 'ACTIVE' ? S : D }}>
+                      {item.status === 'ACTIVE' ? 'Kinh doanh' : 'Ngừng kinh doanh'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '13px 16px' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <a href={`add-vaccine?id=${item.id}`} title="Sửa" style={{
+                        width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: `1.5px solid ${W}22`, background: `${W}11`, color: W, textDecoration: 'none', fontSize: 14, transition: 'all .15s',
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.background = W; e.currentTarget.style.color = '#fff'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = `${W}11`; e.currentTarget.style.color = W; }}>
+                        <FontAwesomeIcon icon={faEdit} />
+                      </a>
+                      <button onClick={() => handleDelete(item.id, item.nameVaccine || item.name)} title="Xóa" style={{
+                        width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: `1.5px solid ${D}22`, background: `${D}11`, color: D, cursor: 'pointer', fontSize: 14, transition: 'all .15s',
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.background = D; e.currentTarget.style.color = '#fff'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = `${D}11`; e.currentTarget.style.color = D; }}>
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
               ))}
-            </Select>
-          </Col>
-        </Row>
-        <div style={{ marginTop: 20, marginBottom: 20, display: "flex", alignItems: "center" }}>
-          {/* Commented section for file input */}
+            </tbody>
+          </table>
         </div>
-      </Card>
 
-      <Card className="table-container">
-        <div className="headvcine">
-        <div className="table-container-title">
-          <FontAwesomeIcon
-            icon={faListAlt}
-            style={{ fontSize: "26px", marginRight: "10px" }} />
-          <span style={{ fontSize: "18px", fontWeight: "500" }}>Danh sách vaccine</span>
-        </div>
-        <a className="btn btn-primary btnaddvaccine" href="add-vaccine">
-          <i className="fa fa-plus"></i> Thêm mới
-        </a>
-        </div>
-        <Table columns={columns} dataSource={vaccines || []} pagination={false} loading={loading} />
-        <div style={{ display: "flex", width: "100%", marginTop: 30, marginBottom: 30 }}>
-          <Pagination
-            current={currentPage}
-            pageSize={pageSize}
-            total={total}
-            showSizeChanger
-            onChange={onPageChange}
-            style={{ marginLeft: "auto" }}
-          />
-        </div>
-      </Card>
-
-      <ModalHandle modalHandle={modalHandle} setModalHandle={setModalHandle} setVaccines={setVaccines} />
-    </React.Fragment>
+        {/* pagination */}
+        {totalPages > 1 && (
+          <div style={{ padding: '16px 20px', borderTop: `1px solid ${B}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <span style={{ fontSize: 13, color: T2 }}>
+              Trang {currentPage} / {totalPages} &nbsp;·&nbsp; Tổng {total} vaccine
+            </span>
+            <div className="pg-vac">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>← Trước</button>
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                const page = totalPages <= 7 ? i + 1
+                  : currentPage <= 4 ? i + 1
+                  : currentPage >= totalPages - 3 ? totalPages - 6 + i
+                  : currentPage - 3 + i;
+                return (
+                  <button key={page} className={currentPage === page ? 'active' : ''}
+                    onClick={() => setCurrentPage(page)}>{page}</button>
+                );
+              })}
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Sau →</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

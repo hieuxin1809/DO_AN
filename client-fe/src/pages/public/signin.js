@@ -92,7 +92,7 @@ function Login() {
     <div className="login-container">
       <div className="login-card">
         <div className="login-image">
-          <h1>VaxMS</h1>
+          <h1>Ivaccine</h1>
           <p>Hệ thống quản lý tiêm chủng hiệu quả.</p>
         </div>
         <div className="login-form">

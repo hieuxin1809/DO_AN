@@ -1,5 +1,6 @@
 package com.web.api;
 
+import com.web.models.CreateVaccineInventoryRequest;
 import com.web.models.DeleteVaccineInventoryRequest;
 import com.web.models.DetailVaccineRequest;
 import com.web.models.ListVaccineInventoryRequest;
@@ -24,6 +25,11 @@ import java.io.IOException;
 public class VaccineInventoryApi {
 
     private final VaccineInventoryService vaccineInventoryService;
+
+    @PostMapping("/create")
+    public ResponseEntity<?> createVaccineInventory(@RequestBody CreateVaccineInventoryRequest request) {
+        return new ResponseEntity<>(vaccineInventoryService.createVaccineInventory(request), HttpStatus.CREATED);
+    }
 
     @PostMapping("/import")
     public void importVaccineInventory(MultipartFile file) throws IOException {

@@ -16,6 +16,7 @@ export class VaccineInventoryApi {
       data: data,
     });
   };
+
   static deleteVaccineInventory = (data) => {
     return axios({
       method: "POST",
@@ -23,13 +24,20 @@ export class VaccineInventoryApi {
       data: data,
     });
   };
+
+  static createVaccineInventory = (data) => {
+    return axios({
+      method: "POST",
+      url: `/api/vaccine-inventory/create`,
+      data: data,
+    });
+  };
+
   static importVaccineInventory = (data) => {
     return axios({
       method: "POST",
       url: `/api/vaccine-inventory/import`,
-      headers: {
-        'Content-Type': 'multipart/form-data', 
-      },
+      headers: { 'Content-Type': 'multipart/form-data' },
       data: data,
     });
   };

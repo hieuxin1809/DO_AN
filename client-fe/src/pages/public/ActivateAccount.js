@@ -60,7 +60,7 @@ function ActivateAccount() {
     <div className="activate-account-container">
       <div className="activate-account-card">
         <div className="activate-account-image">
-          <h1>VaxMS</h1>
+          <h1>Ivaccine</h1>
           <p>Kích hoạt tài khoản của bạn dễ dàng và nhanh chóng.</p>
         </div>
         <div className="activate-account-form">

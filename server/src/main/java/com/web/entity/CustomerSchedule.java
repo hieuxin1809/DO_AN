@@ -74,4 +74,12 @@ public class CustomerSchedule {
     @JoinColumn(name = "nurse_id")
     private Nurse nurse;
 
+    /**
+     * true = user (đã login) đặt lịch cho người khác (con/cháu/người thân).
+     * Khi true, hệ thống bỏ qua kiểm tra personalization (số mũi, khoảng cách)
+     * vì lịch sử tiêm thuộc về user, không phải patient được tiêm.
+     * Mặc định false (đặt cho chính mình).
+     */
+    @Column(name = "booking_for_other")
+    private Boolean bookingForOther;
 }

@@ -29,4 +29,7 @@ public class PaymentRequest {
     private String address;
 
     private String note;
+
+    /** true = đặt lịch cho người khác (con/cháu...) → bypass personalization check */
+    private Boolean bookingForOther;
 }

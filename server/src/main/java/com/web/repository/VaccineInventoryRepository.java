@@ -1,5 +1,6 @@
 package com.web.repository;
 
+import com.web.entity.Center;
 import com.web.entity.Vaccine;
 import com.web.entity.VaccineInventory;
 import org.springframework.data.domain.Page;
@@ -15,6 +16,8 @@ import java.util.Optional;
 public interface VaccineInventoryRepository extends JpaRepository<VaccineInventory, Long> {
 
     Optional<VaccineInventory> findByVaccine(Vaccine vaccine);
+
+    Optional<VaccineInventory> findByVaccineAndCenter(Vaccine vaccine, Center center);
 
     @Query("select vi from VaccineInventory vi  join  Vaccine v on v.id = vi.vaccine.id where v.id = ?1")
     Optional<VaccineInventory> findByVaccineId(long vaccineId);

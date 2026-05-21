@@ -29,6 +29,19 @@ public class MessageController {
     @Autowired
     private ChatRepository chatRepository;
 
+    /**
+     * Lấy danh sách user có thể nhận chat từ khách hàng.
+     * Bao gồm: Support Staff, Doctor, Nurse, Admin (mọi role trừ Customer).
+     */
+    private List<User> getAllSupportStaff() {
+        List<User> list = new ArrayList<>();
+        list.addAll(userRepository.getUserByRole(Contains.ROLE_STAFF));
+        list.addAll(userRepository.getUserByRole(Contains.ROLE_DOCTOR));
+        list.addAll(userRepository.getUserByRole(Contains.ROLE_NURSE));
+        list.addAll(userRepository.getUserByRole(Contains.ROLE_ADMIN));
+        return list;
+    }
+
     @MessageMapping("/hello/{id}")
     public void send(SimpMessageHeaderAccessor sha, @Payload String message,@DestinationVariable String id) {
         System.out.println("sha: "+sha.getUser().getName());
@@ -49,7 +62,8 @@ public class MessageController {
         map.put("sender", sender.getId());
         map.put("isFile", 0);
         if(reciver == null){
-            List<User> list = userRepository.getUserByRole(Contains.ROLE_STAFF);
+            List<User> list = getAllSupportStaff();
+            System.out.println("[Chat] broadcasting to " + list.size() + " staff users");
             for (User user : list) {
                 simpMessagingTemplate.convertAndSendToUser(user.getEmail(), "/queue/messages", message,map);
             }
@@ -81,7 +95,7 @@ public class MessageController {
         map.put("sender", sender.getId());
         map.put("isFile", 1);
         if(reciver == null){
-            List<User> list = userRepository.getUserByRole(Contains.ROLE_STAFF);
+            List<User> list = getAllSupportStaff();
             for (User user : list) {
                 simpMessagingTemplate.convertAndSendToUser(user.getEmail(), "/queue/messages", message,map);
             }

@@ -37,8 +37,10 @@ body{
     background: transparent;
 }
 .imagelogoheader{
-    height: 37px;
+    height: 46px;
     max-height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
 }
 .itemtopheader{
     color: #2A388F;

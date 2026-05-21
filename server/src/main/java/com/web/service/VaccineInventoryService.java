@@ -2,6 +2,7 @@ package com.web.service;
 
 import com.web.entity.*;
 import com.web.exception.MessageException;
+import com.web.models.CreateVaccineInventoryRequest;
 import com.web.models.DeleteVaccineInventoryRequest;
 import com.web.models.DetailVaccineRequest;
 import com.web.models.ListVaccineInventoryRequest;
@@ -10,6 +11,7 @@ import com.web.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import java.text.SimpleDateFormat;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -49,17 +51,68 @@ public class VaccineInventoryService {
         }
         Pageable pageable = PageRequest.of(requestBody.getPage() - 1, requestBody.getLimit());
 
-        Page<VaccineInventory> vaccinePage = vaccineInventoryRepository.findAll(specificationVaccineInventoryList(), pageable);
+        Page<VaccineInventory> vaccinePage = vaccineInventoryRepository.findAll(
+                specificationVaccineInventoryList(requestBody.getCenterId()), pageable);
         List<ListVaccineInventoryResponse> vaccines = vaccinePage.getContent().stream().map(e
                 -> ListVaccineInventoryResponse.builder()
                 .id(e.getId())
                 .vaccine(e.getVaccine())
+                .center(e.getCenter())
                 .quantity(e.getQuantity())
+                .exportedQuantity(e.getExportedQuantity())
                 .createdDate(e.getCreatedDate())
+                .expirationDate(e.getExpirationDate())
                 .status(e.getStatus())
                 .build()
         ).toList();
         return new PageImpl<>(vaccines, pageable, vaccinePage.getTotalElements());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public VaccineInventory createVaccineInventory(CreateVaccineInventoryRequest requestBody) {
+        if (ObjectUtils.isEmpty(requestBody)) {
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Dữ liệu không hợp lệ");
+        }
+        Optional<Vaccine> optionalVaccine = vaccineRepository.findById(requestBody.getVaccineId());
+        if (optionalVaccine.isEmpty()) {
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Vaccine không tồn tại");
+        }
+        Optional<Center> optionalCenter = centerRepository.findById(requestBody.getCenterId());
+        if (optionalCenter.isEmpty()) {
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Trung tâm không tồn tại");
+        }
+        Vaccine vaccine = optionalVaccine.get();
+        Center center   = optionalCenter.get();
+
+        // Parse expirationDate
+        Timestamp expirationDate = null;
+        if (!StringUtils.isBlank(requestBody.getExpirationDate())) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                expirationDate = new Timestamp(sdf.parse(requestBody.getExpirationDate()).getTime());
+            } catch (Exception e) {
+                throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Ngày hết hạn không hợp lệ (định dạng yyyy-MM-dd)");
+            }
+        }
+
+        // Nếu đã có lô vaccine ở trung tâm đó thì cộng thêm, không thì tạo mới
+        Optional<VaccineInventory> existing = vaccineInventoryRepository.findByVaccineAndCenter(vaccine, center);
+        VaccineInventory inventory;
+        if (existing.isPresent()) {
+            inventory = existing.get();
+            inventory.setQuantity(inventory.getQuantity() + requestBody.getQuantity());
+            if (expirationDate != null) inventory.setExpirationDate(expirationDate);
+        } else {
+            inventory = new VaccineInventory();
+            inventory.setVaccine(vaccine);
+            inventory.setCenter(center);
+            inventory.setQuantity(requestBody.getQuantity());
+            inventory.setExpirationDate(expirationDate);
+            inventory.setImportDate(new Timestamp(System.currentTimeMillis()));
+            inventory.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+            inventory.setStatus("ACTIVE");
+        }
+        return vaccineInventoryRepository.save(inventory);
     }
 
     public VaccineInventory getByVaccine(DetailVaccineRequest requestBody) {
@@ -214,10 +267,13 @@ public class VaccineInventoryService {
         }
     }
 
-    public Specification<VaccineInventory> specificationVaccineInventoryList() {
+    public Specification<VaccineInventory> specificationVaccineInventoryList(Long centerId) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
-            predicates.add(criteriaBuilder.and(criteriaBuilder.notEqual(root.get("status"), "DELETE")));
+            predicates.add(criteriaBuilder.notEqual(root.get("status"), "DELETE"));
+            if (centerId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("center").get("id"), centerId));
+            }
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
     }

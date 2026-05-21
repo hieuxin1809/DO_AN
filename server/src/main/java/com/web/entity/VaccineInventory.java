@@ -23,11 +23,16 @@ public class VaccineInventory {
 
     private Integer quantity;
 
+    private Integer exportedQuantity;
+
     private Timestamp importDate;
 
     private Timestamp exportDate;
 
     private Timestamp createdDate;
+
+    private Timestamp expirationDate;
+
     private String status;
 
     @ManyToOne

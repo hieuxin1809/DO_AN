@@ -1,179 +1,363 @@
-import Footer from '../../layout/customer/footer/footer'
-import dctracuu from '../../assest/images/dc-tracuu.jpg'
-import logomini from '../../assest/images/vasmsvetay.png'
-import banner2 from '../../assest/images/banner2.jpg'
-import {getMethod} from '../../services/request'
-import {formatMoney} from '../../services/money'
-import { useState, useEffect } from 'react'
-import { Parser } from "html-to-react";
+import { useState, useEffect } from 'react';
+import { getMethod } from '../../services/request';
+import { formatMoney } from '../../services/money';
 import ReactPaginate from 'react-paginate';
-import {toast } from 'react-toastify';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
-import { Navigation, Pagination } from 'swiper/modules';
 
+/* ── palette ──────────────────────────────────── */
+const PRIMARY = '#2A388F';
+const ACCENT  = '#0ea5e9';
+const TEXT    = '#1e293b';
+const TEXT_2  = '#64748b';
+const BORDER  = '#e2e8f0';
+const BG_ROW  = '#f8fafc';
 
+/* ── helpers ──────────────────────────────────── */
+function StockBadge({ inStock }) {
+    return inStock
+        ? <span style={{ display:'inline-flex', alignItems:'center', gap:'5px', background:'#d1fae5', color:'#065f46', padding:'4px 11px', borderRadius:'20px', fontSize:'12px', fontWeight:'700' }}>
+            <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block' }}/>Còn slot
+          </span>
+        : <span style={{ display:'inline-flex', alignItems:'center', gap:'5px', background:'#fee2e2', color:'#991b1b', padding:'4px 11px', borderRadius:'20px', fontSize:'12px', fontWeight:'700' }}>
+            <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#ef4444', display:'inline-block' }}/>Hết slot
+          </span>;
+}
+
+/* ══════════════════════════════════════════════ */
 var scheduleSize = 10;
 var url = '';
-function TraCuuLichTiem(){
-    const [item, setItem] = useState([]);
-    const [schedule, setSchedule] = useState(null);
+
+function TraCuuLichTiem() {
+    const [item,      setItem]      = useState([]);
+    const [schedule,  setSchedule]  = useState(null);
     const [pageCount, setpageCount] = useState(0);
-    useEffect(()=>{
-        const getItem = async() =>{
-            url = '/api/vaccine-schedule/public/next-schedule?size='+scheduleSize;
-            var response = await getMethod(url+'&page=0');
-            var result = await response.json();
-            setItem(result.content)
-            setpageCount(result.totalPages)
+    const [inputVal,  setInputVal]  = useState('');
+
+    useEffect(() => {
+        const getItem = async () => {
+            url = '/api/vaccine-schedule/public/next-schedule?size=' + scheduleSize;
+            const res    = await getMethod(url + '&page=0');
+            const result = await res.json();
+            setItem(result.content);
+            setpageCount(result.totalPages);
         };
         getItem();
     }, []);
-  
 
-    async function searchSchedule() {
-        var param = document.getElementById("searchschedule").value
-        url = '/api/vaccine-schedule/public/next-schedule?size='+scheduleSize+'&param='+param;
-        var response = await getMethod(url+'&page=0');
-        var result = await response.json();
-        setItem(result.content)
-        setpageCount(result.totalPages)
+    async function searchSchedule(val) {
+        url = '/api/vaccine-schedule/public/next-schedule?size=' + scheduleSize + '&param=' + val;
+        const res    = await getMethod(url + '&page=0');
+        const result = await res.json();
+        setItem(result.content);
+        setpageCount(result.totalPages);
     }
 
-    async function pageation(page) {
-        var response = await getMethod(url+'&page='+page);
-        var result = await response.json();
-        setItem(result.content)
-        setpageCount(result.totalPages)
-    }
+    const handlePageClick = async (data) => {
+        const res    = await getMethod(url + '&page=' + data.selected);
+        const result = await res.json();
+        setItem(result.content);
+        setpageCount(result.totalPages);
+    };
 
-    const handlePageClick = async (data)=>{
-        var currentPage = data.selected
-        await pageation(currentPage);
-    }
+    return (
+        <div style={{ background: '#f0f4f8', minHeight: '80vh' }}>
 
-    return(
-     <div className='container-web'>
-        <img src={dctracuu} className='imgtracuulichtiem'/>
-        <div className='row'>
-                <div className='col-sm-12'>
-                    <p className='link-head-section'>
-                        <a href="https://vnvc.vn/">Trang chủ</a>
-                        <span class="separator"> » </span>
-                        <span class="last">Tra cứu lịch tiêm chủng</span>
+            {/* ── Hero ────────────────────────────────────── */}
+            <div style={{
+                background: `linear-gradient(135deg, #0d1b3e 0%, ${PRIMARY} 55%, ${ACCENT} 100%)`,
+                padding: '44px 24px 60px',
+                position: 'relative', overflow: 'hidden',
+            }}>
+                {/* decorative circles */}
+                <div style={{ position:'absolute', top:'-40px', right:'-40px', width:'220px', height:'220px', borderRadius:'50%', background:'rgba(255,255,255,0.04)', pointerEvents:'none' }}/>
+                <div style={{ position:'absolute', bottom:'-60px', left:'10%', width:'180px', height:'180px', borderRadius:'50%', background:'rgba(255,255,255,0.03)', pointerEvents:'none' }}/>
+
+                <div style={{ maxWidth:'900px', margin:'0 auto', textAlign:'center', position:'relative', zIndex:1 }}>
+                    {/* breadcrumb */}
+                    <div style={{ marginBottom:'16px', fontSize:'13px', color:'rgba(255,255,255,0.65)' }}>
+                        <a href="/" style={{ color:'rgba(255,255,255,0.65)', textDecoration:'none' }}>Trang chủ</a>
+                        <span style={{ margin:'0 8px' }}>›</span>
+                        <span style={{ color:'#fff' }}>Tra cứu lịch tiêm</span>
+                    </div>
+
+                    <h1 style={{ color:'#fff', fontSize:'28px', fontWeight:'800', margin:'0 0 10px', letterSpacing:'-0.5px' }}>
+                        🗓 Tra Cứu Lịch Tiêm Chủng
+                    </h1>
+                    <p style={{ color:'rgba(255,255,255,0.78)', fontSize:'15px', margin:'0 0 28px' }}>
+                        Xem các lịch tiêm sắp tới, tra cứu vaccine và đặt lịch ngay hôm nay
                     </p>
-                    <div className='section-content-web'>
-                        <div className='flex-section'>
-                            <div className='divsc-dkytiem'><img src={logomini} className='img-section-dky-tiem'/></div>
-                            <h2 className='title-dki-tiem-chung'>TRA CỨU LỊCH TIÊM CHỦNG SẮP TỚI</h2>
-                        </div>
+
+                    {/* Search bar */}
+                    <div style={{
+                        display:'flex', gap:'10px', maxWidth:'560px', margin:'0 auto',
+                        background:'rgba(255,255,255,0.12)', borderRadius:'50px',
+                        padding:'6px 6px 6px 20px',
+                        border:'1.5px solid rgba(255,255,255,0.2)',
+                        backdropFilter:'blur(8px)',
+                    }}>
+                        <input
+                            id="searchschedule"
+                            value={inputVal}
+                            onChange={e => { setInputVal(e.target.value); searchSchedule(e.target.value); }}
+                            placeholder="Nhập tên vaccine để tìm kiếm..."
+                            style={{
+                                flex:1, background:'transparent', border:'none', outline:'none',
+                                color:'#fff', fontSize:'14px', fontFamily:'inherit',
+                            }}
+                        />
+                        <button
+                            onClick={() => searchSchedule(inputVal)}
+                            style={{
+                                padding:'10px 22px', borderRadius:'40px',
+                                background:`linear-gradient(135deg, ${ACCENT}, #0284c7)`,
+                                color:'#fff', border:'none', fontWeight:'700',
+                                fontSize:'13.5px', cursor:'pointer', whiteSpace:'nowrap',
+                            }}
+                        >
+                            🔍 Tìm kiếm
+                        </button>
                     </div>
-                    <div className='headertracuu'>
-                        <input onKeyUp={searchSchedule} id='searchschedule' className='input-search-schedule' placeholder='Nhập tên vaccine'/>
-                        <a href='lich-tiem-da-qua'>Xem lịch tiêm chủng đã qua</a>
-                    </div>
-                    <table className='table table-bordered tablelichtiemvaccine'> 
-                        <thead className='thead'>
-                            <tr>
-                                <th>STT</th>
-                                <th>Tên vaccine</th>
-                                <th>Mô tả</th>
-                                <th>Nhà sản xuất</th>
-                                <th className='col-gre'>Giá bán</th>
-                                <th className='col-gre'>Ngày tiêm</th>
-                                <th className='col-blue'>Giới hạn</th>
-                                <th className='col-blue'>Địa điểm</th>
-                                <th className='col-blue'>Tình trạng</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {item.map((item, index)=>{
-                                return <tr className='pointer hoverschedule' onClick={()=>setSchedule(item)} data-bs-toggle="modal" data-bs-target="#exampleModal">
-                                    <td>{index+1}</td>
-                                    <td>{item.vaccine.name}</td>
-                                    <td dangerouslySetInnerHTML={{__html:item?.vaccine.description}}></td>
-                                    <td>{item.vaccine.manufacturer.name}<br/>{item.vaccine.manufacturer.country}</td>
-                                    <td className='col-gre'>{formatMoney(item.vaccine.price)}</td>
-                                    <td className='col-gre'>{item.startDate} - {item.endDate}</td>
-                                    <td className='col-blue'>{item.limitPeople}</td>
-                                    <td className='col-blue'>{item.center.centerName}<br/>
-                                        {item.center.street},
-                                        {item.center.ward},
-                                        {item.center.district},
-                                        {item.center.city},
-                                    </td>
-                                    <td className='col-blue'>{item.inStock==true?<span className='whiteText'>Còn</span>:<span className='redText'>Đã hết slot</span>}</td>
-                                </tr>
-                            })}
-                        </tbody>
-                    </table>
-                    <ReactPaginate 
-                        marginPagesDisplayed={2} 
-                        pageCount={pageCount} 
-                        onPageChange={handlePageClick}
-                        containerClassName={'pagination'} 
-                        pageClassName={'page-item'} 
-                        pageLinkClassName={'page-link'}
-                        previousClassName='page-item'
-                        previousLinkClassName='page-link'
-                        nextClassName='page-item'
-                        nextLinkClassName='page-link'
-                        breakClassName='page-item'
-                        breakLinkClassName='page-link' 
-                        previousLabel='Trang trước'
-                        nextLabel='Trang sau'
-                        activeClassName='active'/>
                 </div>
             </div>
-            <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="exampleModalLabel">Thông tin vaccine</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+
+            {/* ── Content ─────────────────────────────────── */}
+            <div style={{ maxWidth:'1200px', margin:'-24px auto 0', padding:'0 20px 60px', position:'relative', zIndex:2 }}>
+
+                {/* top bar */}
+                <div style={{
+                    display:'flex', alignItems:'center', justifyContent:'space-between',
+                    flexWrap:'wrap', gap:'10px',
+                    background:'#fff', borderRadius:'14px', padding:'14px 20px',
+                    boxShadow:'0 2px 12px rgba(0,0,0,0.07)', border:`1px solid ${BORDER}`,
+                    marginBottom:'16px',
+                }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                        <span style={{
+                            background:`rgba(14,165,233,0.1)`, color:ACCENT,
+                            padding:'4px 12px', borderRadius:'20px', fontSize:'13px', fontWeight:'700',
+                        }}>
+                            📋 {item.length} lịch tiêm đang hiển thị
+                        </span>
                     </div>
-                    <div class="modal-body">
-                        <table className='table'>
-                            <tr>
-                                <th>Ảnh</th>
-                                <td><img src={schedule==null?'':schedule.vaccine.image} className='imgtableschedule'/></td>
-                            </tr>
-                            <tr>
-                                <th>Tên vaccine</th>
-                                <td>{schedule==null?'':schedule.vaccine.name}</td>
-                            </tr>
-                            <tr>
-                                <th>Nhóm tuổi</th>
-                                <td>{schedule==null?'':schedule.vaccine.ageGroup.ageRange}</td>
-                            </tr>
-                            <tr>
-                                <th>Mô tả</th>
-                                <td>{schedule==null?'':schedule.vaccine.description}</td>
-                            </tr>
-                            <tr>
-                                <th>Giá tiền</th>
-                                <td>{schedule==null?'':formatMoney(schedule.vaccine.price)}</td>
-                            </tr>
-                            <tr>
-                                <th>Loại vaccine</th>
-                                <td>{schedule==null?'':schedule.vaccine.vaccineType.typeName}</td>
-                            </tr>
-                            <tr>
-                                <th>Nhà máy sản xuất</th>
-                                <td>{schedule==null?'':schedule.vaccine.manufacturer.name}</td>
-                            </tr>
-                            <tr>
-                                <th>Quốc gia sản xuất</th>
-                                <td>{schedule==null?'':schedule.vaccine.manufacturer.country}</td>
-                            </tr>
+                    <a
+                        href="/lich-tiem-da-qua"
+                        style={{
+                            display:'inline-flex', alignItems:'center', gap:'6px',
+                            fontSize:'13.5px', color:ACCENT, fontWeight:'600',
+                            textDecoration:'none', padding:'7px 16px',
+                            border:`1.5px solid ${ACCENT}`, borderRadius:'8px',
+                            transition:'all 0.2s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background=ACCENT; e.currentTarget.style.color='#fff'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color=ACCENT; }}
+                    >
+                        📆 Xem lịch đã qua
+                    </a>
+                </div>
+
+                {/* ── Table ─────────────────────────────────── */}
+                <div style={{ background:'#fff', borderRadius:'14px', overflow:'hidden', boxShadow:'0 2px 12px rgba(0,0,0,0.07)', border:`1px solid ${BORDER}` }}>
+                    <div style={{ overflowX:'auto' }}>
+                        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'13.5px', color:TEXT }}>
+                            <thead>
+                                <tr style={{ background:`linear-gradient(90deg, ${PRIMARY} 0%, #1e4fad 100%)`, color:'#fff' }}>
+                                    {['#', 'Vaccine', 'Nhà sản xuất', 'Giá bán', 'Thời gian tiêm', 'Giới hạn', 'Trung tâm', 'Tình trạng'].map((h, i) => (
+                                        <th key={i} style={{
+                                            padding:'13px 14px', fontWeight:'700', textAlign:'left',
+                                            fontSize:'12px', letterSpacing:'0.4px',
+                                            textTransform:'uppercase', whiteSpace:'nowrap',
+                                        }}>{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {item.length === 0 && (
+                                    <tr>
+                                        <td colSpan={8} style={{ padding:'56px', textAlign:'center', color:TEXT_2 }}>
+                                            <div style={{ fontSize:'36px', marginBottom:'12px' }}>🗓</div>
+                                            Không tìm thấy lịch tiêm nào
+                                        </td>
+                                    </tr>
+                                )}
+                                {item.map((it, index) => (
+                                    <tr
+                                        key={index}
+                                        onClick={() => setSchedule(it)}
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#scheduleModal"
+                                        style={{
+                                            background: index % 2 === 0 ? '#fff' : BG_ROW,
+                                            borderBottom:`1px solid ${BORDER}`,
+                                            cursor:'pointer', transition:'background 0.15s',
+                                        }}
+                                        onMouseEnter={e => e.currentTarget.style.background='rgba(14,165,233,0.06)'}
+                                        onMouseLeave={e => e.currentTarget.style.background= index % 2 === 0 ? '#fff' : BG_ROW}
+                                    >
+                                        <td style={{ padding:'13px 14px', color:TEXT_2, fontWeight:'600' }}>{index + 1}</td>
+                                        <td style={{ padding:'13px 14px', maxWidth:'180px' }}>
+                                            <div style={{ fontWeight:'700', color:PRIMARY, lineHeight:'1.4' }}>{it.vaccine.name}</div>
+                                            <div style={{ fontSize:'12px', color:TEXT_2, marginTop:'2px' }}>{it.vaccine.vaccineType?.typeName}</div>
+                                        </td>
+                                        <td style={{ padding:'13px 14px', whiteSpace:'nowrap' }}>
+                                            <div style={{ fontWeight:'600' }}>{it.vaccine.manufacturer.name}</div>
+                                            <div style={{ fontSize:'12px', color:TEXT_2 }}>🌍 {it.vaccine.manufacturer.country}</div>
+                                        </td>
+                                        <td style={{ padding:'13px 14px', whiteSpace:'nowrap' }}>
+                                            <span style={{ fontWeight:'700', color:'#059669', fontSize:'14px' }}>
+                                                {formatMoney(it.vaccine.price)}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding:'13px 14px', whiteSpace:'nowrap', fontSize:'13px' }}>
+                                            <div style={{ color:PRIMARY, fontWeight:'600' }}>📅 {it.startDate}</div>
+                                            <div style={{ color:TEXT_2, fontSize:'12px' }}>→ {it.endDate}</div>
+                                        </td>
+                                        <td style={{ padding:'13px 14px', textAlign:'center' }}>
+                                            <span style={{
+                                                background:'rgba(42,56,143,0.08)', color:PRIMARY,
+                                                padding:'4px 10px', borderRadius:'20px',
+                                                fontWeight:'700', fontSize:'13px',
+                                            }}>
+                                                {it.limitPeople}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding:'13px 14px', maxWidth:'180px', fontSize:'13px' }}>
+                                            <div style={{ fontWeight:'600' }}>{it.center.centerName}</div>
+                                            <div style={{ color:TEXT_2, fontSize:'12px', marginTop:'2px', lineHeight:'1.5' }}>
+                                                📍 {it.center.street}, {it.center.ward}, {it.center.district}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding:'13px 14px' }}>
+                                            <StockBadge inStock={it.inStock} />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
                         </table>
                     </div>
+
+                    {/* Pagination */}
+                    {pageCount > 1 && (
+                        <div style={{ padding:'16px 20px', borderTop:`1px solid ${BORDER}` }}>
+                            <ReactPaginate
+                                marginPagesDisplayed={2}
+                                pageCount={pageCount}
+                                onPageChange={handlePageClick}
+                                containerClassName={'pagination'}
+                                pageClassName={'page-item'}
+                                pageLinkClassName={'page-link'}
+                                previousClassName="page-item"
+                                previousLinkClassName="page-link"
+                                nextClassName="page-item"
+                                nextLinkClassName="page-link"
+                                breakClassName="page-item"
+                                breakLinkClassName="page-link"
+                                previousLabel="Trang trước"
+                                nextLabel="Trang sau"
+                                activeClassName="active"
+                            />
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ── Modal chi tiết vaccine ───────────────────── */}
+            <div className="modal fade" id="scheduleModal" tabIndex="-1" aria-hidden="true">
+                <div className="modal-dialog modal-dialog-centered modal-lg">
+                    <div className="modal-content" style={{ borderRadius:'16px', overflow:'hidden', border:'none' }}>
+
+                        {/* modal header */}
+                        <div style={{
+                            background:`linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
+                            padding:'18px 24px',
+                            display:'flex', alignItems:'center', justifyContent:'space-between',
+                        }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                                <span style={{ fontSize:'20px' }}>💉</span>
+                                <h5 style={{ color:'#fff', margin:0, fontWeight:'700', fontSize:'16px' }}>
+                                    {schedule?.vaccine?.name || 'Thông tin vaccine'}
+                                </h5>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn-close btn-close-white"
+                                data-bs-dismiss="modal"
+                                aria-label="Close"
+                            />
+                        </div>
+
+                        <div className="modal-body" style={{ padding:'24px' }}>
+                            {schedule && (
+                                <div style={{ display:'flex', gap:'24px', flexWrap:'wrap' }}>
+                                    {/* image */}
+                                    <div style={{ flexShrink:0 }}>
+                                        <img
+                                            src={schedule.vaccine.image}
+                                            alt={schedule.vaccine.name}
+                                            style={{
+                                                width:'130px', height:'130px', objectFit:'cover',
+                                                borderRadius:'12px', border:`2px solid ${BORDER}`,
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* info grid */}
+                                    <div style={{ flex:1, minWidth:'240px' }}>
+                                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px 20px' }}>
+                                            {[
+                                                { label:'Nhóm tuổi',       value: schedule.vaccine.ageGroup?.ageRange },
+                                                { label:'Loại vaccine',    value: schedule.vaccine.vaccineType?.typeName },
+                                                { label:'Nhà sản xuất',    value: schedule.vaccine.manufacturer?.name },
+                                                { label:'Quốc gia',        value: schedule.vaccine.manufacturer?.country },
+                                                { label:'Giá tiêm',        value: <span style={{ color:'#059669', fontWeight:'700' }}>{formatMoney(schedule.vaccine.price)}</span> },
+                                                { label:'Tình trạng',      value: <StockBadge inStock={schedule.inStock} /> },
+                                                { label:'Thời gian tiêm',  value: `${schedule.startDate} → ${schedule.endDate}` },
+                                                { label:'Giới hạn người',  value: schedule.limitPeople },
+                                            ].map((r, i) => (
+                                                <div key={i}>
+                                                    <div style={{ fontSize:'11px', fontWeight:'700', color:TEXT_2, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'4px' }}>{r.label}</div>
+                                                    <div style={{ fontSize:'13.5px', color:TEXT, fontWeight:'500' }}>{r.value || '—'}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* center */}
+                                        <div style={{ marginTop:'14px', padding:'12px 16px', background:BG_ROW, borderRadius:'10px', border:`1px solid ${BORDER}` }}>
+                                            <div style={{ fontSize:'11px', fontWeight:'700', color:TEXT_2, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'5px' }}>📍 Trung tâm tiêm</div>
+                                            <div style={{ fontWeight:'600', color:PRIMARY }}>{schedule.center?.centerName}</div>
+                                            <div style={{ fontSize:'13px', color:TEXT_2, marginTop:'2px' }}>
+                                                {schedule.center?.street}, {schedule.center?.ward}, {schedule.center?.district}, {schedule.center?.city}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="modal-footer" style={{ padding:'14px 24px', borderTop:`1px solid ${BORDER}` }}>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                data-bs-dismiss="modal"
+                                style={{ borderRadius:'8px' }}
+                            >
+                                Đóng
+                            </button>
+                            <a
+                                href="/dang-ky-tiem-chung"
+                                className="btn"
+                                style={{
+                                    background:`linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
+                                    color:'#fff', borderRadius:'8px', fontWeight:'700',
+                                    textDecoration:'none',
+                                }}
+                            >
+                                📅 Đặt lịch tiêm ngay
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
-     </div>
+
+        </div>
     );
 }
 

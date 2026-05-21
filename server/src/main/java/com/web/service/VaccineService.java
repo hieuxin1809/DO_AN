@@ -24,10 +24,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.modelmapper.ModelMapper;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -82,7 +79,11 @@ public class VaccineService {
         if (ObjectUtils.isEmpty(requestBody)) {
             throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Đã có lỗi");
         }
-        Pageable pageable = PageRequest.of(requestBody.getPage() - 1, requestBody.getLimit());
+        Pageable pageable = PageRequest.of(
+                requestBody.getPage() - 1,
+                requestBody.getLimit(),
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
 
         Page<Vaccine> vaccinePage = vaccineRepository.findAll(specificationVaccineList(requestBody), pageable);
         List<ListVaccineResponse> vaccines = vaccinePage.getContent().stream().map(e
@@ -142,7 +143,7 @@ public class VaccineService {
         vaccine.setName(requestBody.getName());
         vaccine.setPrice(requestBody.getPrice());
         vaccine.setImage(requestBody.getImage());
-        vaccine.setInventory(requestBody.getInventory());
+        vaccine.setInventory(0); // Tồn kho bắt đầu = 0, phải nhập kho rồi xuất kho mới tạo lịch được
         vaccine.setDescription(requestBody.getDescription());
         vaccine.setStatus(requestBody.getStatus());
         vaccine.setVaccineType(optionalVaccineType.get());
@@ -150,17 +151,8 @@ public class VaccineService {
         vaccine.setAgeGroup(optionalAgeGroup.get());
         vaccine.setMaxDose(requestBody.getMaxDose());
         vaccine.setMinIntervalMonths(requestBody.getMinIntervalMonths());
-        vaccine.setInventory(vaccine.getInventory());
         vaccine.setCreatedDate(new Timestamp(System.currentTimeMillis()));
         vaccineRepository.save(vaccine);
-
-        // Tạo VaccineInventory và sử dụng phương thức getCenter
-//        VaccineInventory vaccineInventory = new VaccineInventory();
-//        vaccineInventory.setVaccine(vaccine);
-//        vaccineInventory.setQuantity(0);
-//        vaccineInventory.setCenter(getCenter("Ha Noi"));
-//        vaccineInventory.setStatus("Đang sử dụng");
-//        vaccineInventoryRepository.save(vaccineInventory);
 
         return modelMapper.map(vaccine, CreateVaccineResponse.class);
     }
@@ -234,34 +226,44 @@ public class VaccineService {
 
     public PlusVaccineResponse plusVaccine(PlusVaccineRequest requestBody) {
         if (ObjectUtils.isEmpty(requestBody)) {
-            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Đã có lỗi");
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Đã có lỗi");
         }
         Optional<Vaccine> optionalVaccine = vaccineRepository.findByName(requestBody.getName());
         if (optionalVaccine.isEmpty()) {
-            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Vaccine không tồn tại");
-        }
-        Optional<VaccineInventory> optionalVaccineInventory = vaccineInventoryRepository.findByVaccine(optionalVaccine.get());
-        if (optionalVaccineInventory.isEmpty()) {
-            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Vaccine trong kho không tồn tại");
-        }
-        if (optionalVaccineInventory.get().getQuantity() == 0) {
-            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Số lượng vaccine trong kho đã hết");
-        }
-        if (requestBody.getQuantity() > optionalVaccineInventory.get().getQuantity()) {
-            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Số lượng vaccine trong kho không đủ");
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Vaccine không tồn tại");
         }
         Vaccine vaccine = optionalVaccine.get();
 
         if (ObjectUtils.equals(vaccine.getStatus(), "INACTIVE")) {
-            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Chỉ được thêm số lượng cho vaccine còn kinh doanh");
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Chỉ được thêm số lượng cho vaccine còn kinh doanh");
         }
 
-        vaccine.setInventory(vaccine.getInventory() + requestBody.getQuantity());
-        vaccineRepository.save(vaccine);
-
+        // Tìm kho theo vaccine + trung tâm
+        if (ObjectUtils.isEmpty(requestBody.getCenterId())) {
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Vui lòng chọn trung tâm để xuất kho");
+        }
+        Optional<Center> optionalCenter = centerRepository.findById(requestBody.getCenterId());
+        if (optionalCenter.isEmpty()) {
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Trung tâm không tồn tại");
+        }
+        Optional<VaccineInventory> optionalVaccineInventory = vaccineInventoryRepository.findByVaccineAndCenter(vaccine, optionalCenter.get());
+        if (optionalVaccineInventory.isEmpty()) {
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Không tìm thấy lô vaccine này tại trung tâm đã chọn");
+        }
         VaccineInventory vaccineInventory = optionalVaccineInventory.get();
+        if (vaccineInventory.getQuantity() == null || vaccineInventory.getQuantity() == 0) {
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Số lượng vaccine trong kho của trung tâm này đã hết");
+        }
+        if (requestBody.getQuantity() > vaccineInventory.getQuantity()) {
+            throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Số lượng xuất vượt quá tồn kho của trung tâm (còn " + vaccineInventory.getQuantity() + ")");
+        }
+
+        // Trừ tồn kho vật lý, cộng exportedQuantity theo trung tâm
         vaccineInventory.setQuantity(vaccineInventory.getQuantity() - requestBody.getQuantity());
+        int prevExported = vaccineInventory.getExportedQuantity() != null ? vaccineInventory.getExportedQuantity() : 0;
+        vaccineInventory.setExportedQuantity(prevExported + requestBody.getQuantity());
         vaccineInventoryRepository.save(vaccineInventory);
+
         return PlusVaccineResponse.builder()
                 .id(vaccine.getId())
                 .vaccineType(vaccine.getVaccineType())

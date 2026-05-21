@@ -56,7 +56,7 @@ function DatLaiMatKhau() {
     <div className="reset-password-container">
       <div className="reset-password-card">
         <div className="reset-password-image">
-          <h1>VaxMS</h1>
+          <h1>Ivaccine</h1>
           <p>Đặt lại mật khẩu của bạn một cách an toàn.</p>
         </div>
         <div className="reset-password-form">

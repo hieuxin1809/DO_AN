@@ -1,5 +1,6 @@
 package com.web.models;
 
+import com.web.entity.Center;
 import com.web.entity.Vaccine;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,7 +18,10 @@ import java.sql.Timestamp;
 public class ListVaccineInventoryResponse {
     private Long id;
     private Vaccine vaccine;
+    private Center center;
     private Integer quantity;
+    private Integer exportedQuantity;
     private Timestamp createdDate;
+    private Timestamp expirationDate;
     private String status;
 }

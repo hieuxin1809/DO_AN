@@ -1,4 +1,4 @@
-import logo from '../../../assest/images/vasmsvetay.png';
+import logo from '../../../assest/images/ivaccine-logo.jpg';
 import { useState, useEffect } from 'react';
 import { getMethod } from '../../../services/request';
 
@@ -30,7 +30,7 @@ function Header() {
         <a href="/tai-khoan"   style={topLinkStyle}>Tài khoản</a>
         <a onClick={logout}    style={{...topLinkStyle, color:'#e05c00', cursor:'pointer'}}>Đăng xuất</a>
       </>
-    : <a href="/signin" style={{...topLinkStyle, color:'#e05c00', fontWeight:'700'}}>Đăng nhập</a>;
+    : <a href="/login" style={{...topLinkStyle, color:'#e05c00', fontWeight:'700'}}>Đăng nhập</a>;
 
   return (
     <div id="headerweb">
@@ -67,8 +67,8 @@ function Header() {
                   <i className="fa fa-calendar" style={{marginRight:'5px'}} />
                   ĐĂNG KÝ TIÊM
                 </a>
-                <a href="tel:0977011436" style={{...topLinkStyle, color:'#e05c00', fontWeight:'700'}}>
-                  HOTLINE: 0977.011.436
+                <a href="tel:0342046981" style={{...topLinkStyle, color:'#e05c00', fontWeight:'700'}}>
+                  HOTLINE: 0342.046.981
                 </a>
                 {auth}
               </div>

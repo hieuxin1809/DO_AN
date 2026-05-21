@@ -87,6 +87,9 @@ public class CustomerScheduleService {
     private VNPayService vnPayService;
 
     @Autowired
+    private PayPalService payPalService;
+
+    @Autowired
     private MailService mailService;
 
     @Autowired
@@ -185,7 +188,8 @@ public class CustomerScheduleService {
                             .note(e.getNote())
                             .payStatus(e.getCustomerSchedulePay() != null &&
                                     (e.getCustomerSchedulePay() == CustomerSchedulePay.THANH_TOAN_MOMO ||
-                                            e.getCustomerSchedulePay() == CustomerSchedulePay.THANH_TOAN_VNPAY))
+                                            e.getCustomerSchedulePay() == CustomerSchedulePay.THANH_TOAN_VNPAY ||
+                                            e.getCustomerSchedulePay() == CustomerSchedulePay.THANH_TOAN_PAYPAL))
                             .healthStatusAfter(e.getHealthStatusAfter())
                             .healthStatusBefore(e.getHealthStatusBefore())
                             .completedDate(e.getCompletedDate())
@@ -492,13 +496,17 @@ public class CustomerScheduleService {
     public CustomerSchedule save(CustomerSchedule customerSchedule, PayType payType, String orderId){
         VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository.findById(customerSchedule.getVaccineScheduleTime().getId()).get();
 
-        // --- Kiểm tra cá nhân hóa: số mũi và khoảng cách tối thiểu ---
-        Long vaccineId = vaccineScheduleTime.getVaccineSchedule().getVaccine().getId();
-        com.web.dto.VaccinePersonalizationResponse personalization =
-                vaccinePersonalizationService.checkPersonalization(vaccineId);
-        if (!personalization.isCanBook()) {
-            // Từ chối đặt lịch và trả về lý do cụ thể
-            throw new MessageException(personalization.getReason());
+        // --- Kiểm tra cá nhân hóa: chỉ áp dụng khi user đặt cho CHÍNH MÌNH ---
+        // Nếu đặt cho người khác (con/cháu/người thân), lịch sử tiêm của user
+        // không liên quan đến patient → bypass check.
+        boolean forOther = Boolean.TRUE.equals(customerSchedule.getBookingForOther());
+        if (!forOther) {
+            Long vaccineId = vaccineScheduleTime.getVaccineSchedule().getVaccine().getId();
+            com.web.dto.VaccinePersonalizationResponse personalization =
+                    vaccinePersonalizationService.checkPersonalization(vaccineId);
+            if (!personalization.isCanBook()) {
+                throw new MessageException(personalization.getReason());
+            }
         }
 
         // --- Kiểm tra slot còn chỗ ---
@@ -522,6 +530,10 @@ public class CustomerScheduleService {
             }
             if(payType.equals(PayType.MOMO)){
                 customerSchedule.setCustomerSchedulePay(CustomerSchedulePay.THANH_TOAN_MOMO);
+                customerSchedule.setPayStatus(PayStatus.DA_THANH_TOAN);
+            }
+            if(payType.equals(PayType.PAYPAL)){
+                customerSchedule.setCustomerSchedulePay(CustomerSchedulePay.THANH_TOAN_PAYPAL);
                 customerSchedule.setPayStatus(PayStatus.DA_THANH_TOAN);
             }
         }
@@ -566,6 +578,11 @@ public class CustomerScheduleService {
                 throw new MessageException("Thanh toán thất bại");
             }
         }
+        if(paymentRequest.getPayType().equals(PayType.PAYPAL)){
+            orderId = paymentRequest.getOrderId();
+            // Xác minh với PayPal server bằng clientId/clientSecret để chống fake orderId
+            payPalService.verifyOrder(orderId);
+        }
         if(paymentRepository.findByOrderIdAndRequestId(orderId,orderId).isPresent()){
             throw new MessageException("Không hợp lệ");
         }
@@ -575,6 +592,7 @@ public class CustomerScheduleService {
         customerSchedule.setDob(paymentRequest.getDob());
         customerSchedule.setFullName(paymentRequest.getFullName());
         customerSchedule.setPhone(paymentRequest.getPhone());
+        customerSchedule.setBookingForOther(Boolean.TRUE.equals(paymentRequest.getBookingForOther()));
         save(customerSchedule, paymentRequest.getPayType(), orderId);
     }
 
@@ -607,10 +625,27 @@ public class CustomerScheduleService {
             }
             customerSchedule.setCustomerSchedulePay(CustomerSchedulePay.THANH_TOAN_VNPAY);
         }
+        if(paymentRequest.getPayType().equals(PayType.PAYPAL)){
+            orderId = paymentRequest.getOrderId();
+            payPalService.verifyOrder(orderId);
+            customerSchedule.setCustomerSchedulePay(CustomerSchedulePay.THANH_TOAN_PAYPAL);
+        }
         if(paymentRepository.findByOrderIdAndRequestId(orderId,orderId).isPresent()){
             throw new MessageException("Không hợp lệ");
         }
+        customerSchedule.setPayStatus(PayStatus.DA_THANH_TOAN);
         customerScheduleRepository.save(customerSchedule);
+
+        // Lưu record Payment cho mục đích đối soát + chống thanh toán trùng
+        Payment payment = new Payment();
+        payment.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+        payment.setCreatedBy(userUtils.getUserWithAuthority());
+        payment.setCustomerSchedule(customerSchedule);
+        payment.setPayType(paymentRequest.getPayType());
+        payment.setOrderId(orderId);
+        payment.setRequestId(orderId);
+        payment.setAmount(customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getPrice());
+        paymentRepository.save(payment);
     }
 
 

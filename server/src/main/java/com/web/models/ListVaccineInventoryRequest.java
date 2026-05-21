@@ -12,4 +12,5 @@ import lombok.Setter;
 public class ListVaccineInventoryRequest {
     private int page;
     private int limit;
+    private Long centerId;
 }
