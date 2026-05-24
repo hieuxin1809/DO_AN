@@ -72,4 +72,16 @@ public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedu
     Page<CustomerSchedule> findByDoctor_Id(Long doctorId, Pageable pageable);
 
     Page<CustomerSchedule> findByNurse_Id(Long nurseId, Pageable pageable);
+
+    @Query("select c from CustomerSchedule c where c.user.id = :userId")
+    List<CustomerSchedule> findAllByUserId(@Param("userId") Long userId);
+
+    /** Đếm lịch tiêm có injectDate = ngày cụ thể.
+     *  Lưu ý: entity injectDate là java.sql.Date nên truyền java.sql.Date. */
+    @Query("SELECT COUNT(c) FROM CustomerSchedule c WHERE c.vaccineScheduleTime.injectDate = :injectDate")
+    long countByInjectDate(@Param("injectDate") java.sql.Date injectDate);
+
+    /** Đếm tổng theo từng status — trả về [status, count] */
+    @Query("SELECT c.statusCustomerSchedule, COUNT(c) FROM CustomerSchedule c GROUP BY c.statusCustomerSchedule")
+    List<Object[]> countByStatusGroup();
 }

@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { VaccineApi } from '../../../services/staff/Vaccine.api';
+import { ManufacturerApi } from '../../../services/staff/Manufacturer.api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEdit, faTrash, faSyringe, faPlus, faSearch, faFileExcel, faUpload, faX } from '@fortawesome/free-solid-svg-icons';
+import { faEdit, faTrash, faSyringe, faPlus, faSearch, faX } from '@fortawesome/free-solid-svg-icons';
 import dayjs from 'dayjs';
 import Swal from 'sweetalert2';
 import { AppNotification } from '../../../components/AppNotification';
-import * as XLSX from 'xlsx';
 
 const P = '#2A388F', A = '#0ea5e9', S = '#10b981', D = '#ef4444', W = '#f59e0b';
 const B = '#e2e8f0', T = '#1e293b', T2 = '#64748b';
@@ -21,18 +21,28 @@ const pgCSS = `
 const formatMoney = (v) => v != null ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v) : '—';
 
 const Vaccine = () => {
-  const fileInputRef = useRef(null);
   const [total,       setTotal]       = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize,    setPageSize]    = useState(10);
   const [vaccines,    setVaccines]    = useState([]);
   const [loading,     setLoading]     = useState(false);
   const [formSearch,  setFormSearch]  = useState({ name: '', price: '', manufacturer: '', page: 1, limit: 10 });
+  const [manufacturers, setManufacturers] = useState([]);
 
   const totalPages = Math.ceil(total / pageSize);
 
   useEffect(() => { handleGetVaccines(formSearch); }, [formSearch]);
   useEffect(() => { handleGetVaccines({ ...formSearch, page: currentPage, limit: pageSize }); }, [currentPage, pageSize]);
+
+  /* ─── Load danh sách nhà sản xuất 1 lần ─────────────────── */
+  useEffect(() => {
+    ManufacturerApi.manufacturers()
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.content || []);
+        setManufacturers(list);
+      })
+      .catch(err => console.error('load manufacturers:', err));
+  }, []);
 
   const handleGetVaccines = async (params) => {
     setLoading(true);
@@ -66,41 +76,6 @@ const Vaccine = () => {
       });
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) { AppNotification.error('Vui lòng chọn file'); return; }
-    const formData = new FormData();
-    formData.append('file', file);
-    VaccineApi.importVaccine(formData)
-      .then(() => { AppNotification.success('Nhập dữ liệu thành công'); handleGetVaccines(formSearch); })
-      .catch(err => {
-        const msg = err?.response?.data?.defaultMessage;
-        AppNotification.error(msg || 'Nhập dữ liệu không thành công');
-      });
-  };
-
-  const handleExport = () => {
-    try {
-      const data = vaccines.map((item, i) => ({
-        STT: i + 1,
-        'Tên Vaccine': item?.name,
-        'Số lượng': item?.inventory,
-        'Giá': item?.price,
-        'Loại Vaccine': item?.vaccineType?.typeName,
-        'Độ tuổi': item?.ageGroup?.ageRange,
-        'Nhà sản xuất': item?.manufacturer?.name,
-        'Ngày tạo': item?.createdDate ? dayjs(item.createdDate).format('HH:mm:ss DD-MM-YYYY') : null,
-        'Trạng thái': item?.status === 'ACTIVE' ? 'Kinh doanh' : 'Ngừng kinh doanh',
-      }));
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Data');
-      XLSX.writeFile(wb, 'vaccine_data.xlsx');
-      AppNotification.success('Xuất dữ liệu thành công');
-    } catch { AppNotification.error('Xuất dữ liệu không thành công'); }
-  };
-
-  const manuOptions = ['', 'Pfizer', 'Moderna', 'AstraZeneca'];
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -119,21 +94,6 @@ const Vaccine = () => {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button onClick={() => fileInputRef.current?.click()} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px',
-            borderRadius: 10, border: `1.5px solid ${B}`, background: '#fff', color: T2,
-            fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
-          }}>
-            <FontAwesomeIcon icon={faUpload} /> Import
-          </button>
-          <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFileChange} />
-          <button onClick={handleExport} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px',
-            borderRadius: 10, border: `1.5px solid ${S}22`, background: `${S}11`, color: S,
-            fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
-          }}>
-            <FontAwesomeIcon icon={faFileExcel} /> Export
-          </button>
           <a href="add-vaccine" style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px',
             borderRadius: 10, textDecoration: 'none', fontWeight: 700, fontSize: 14,
@@ -164,7 +124,9 @@ const Vaccine = () => {
             value={formSearch.manufacturer}
             onChange={e => setFormSearch(f => ({ ...f, manufacturer: e.target.value, page: 1 }))}>
             <option value="">Tất cả nhà sản xuất</option>
-            {manuOptions.slice(1).map(m => <option key={m} value={m}>{m}</option>)}
+            {manufacturers.map(m => (
+              <option key={m.id ?? m.name} value={m.name}>{m.name}</option>
+            ))}
           </select>
         </div>
       </div>

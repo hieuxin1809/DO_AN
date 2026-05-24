@@ -62,8 +62,8 @@ export default function CustomerScheduleView() {
           <FontAwesomeIcon icon={faCalendarAlt} style={{ color: '#fff', fontSize: 20 }} />
         </div>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: T }}>Lịch tiêm & Khách hàng</h2>
-          <div style={{ fontSize: 13, color: T2 }}>Danh sách lịch tiêm chủng — tổng {total} lịch</div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: T }}>Quản lý đợt tiêm</h2>
+          <div style={{ fontSize: 13, color: T2 }}>Danh sách các đợt vaccine đã mở — tổng {total} đợt</div>
         </div>
       </div>
 

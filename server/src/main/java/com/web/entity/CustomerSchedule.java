@@ -38,6 +38,10 @@ public class CustomerSchedule {
 
     private String phone;
 
+    /** Số CMND/CCCD của người được tiêm — snapshot tại thời điểm đăng ký. */
+    @Column(name = "id_card", length = 20)
+    private String idCard;
+
     private String address;
     private String note;
 

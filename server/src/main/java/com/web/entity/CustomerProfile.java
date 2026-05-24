@@ -28,6 +28,10 @@ public class CustomerProfile {
 
     private String phone;
 
+    /** Số CMND (9 chữ số) hoặc CCCD (12 chữ số). */
+    @Column(name = "id_card", length = 20)
+    private String idCard;
+
     private String avatar;
 
     private String city;

@@ -1,8 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './aichatbot.css';
 
-const STORAGE_KEY = 'ivaccine_ai_chat_history';
+const STORAGE_KEY    = 'ivaccine_ai_chat_history';
+const SESSION_KEY    = 'ivaccine_ai_session_id';
 const defaultMessage = { text: 'Chào bạn, tôi là trợ lý y tế AI của iVaccine. Tôi có thể giúp gì cho bạn?', isBot: true };
+
+/** Lấy hoặc tạo sessionId — giữ ngữ cảnh hội thoại với backend.
+ *  Mỗi tab browser dùng cùng 1 sessionId cho đến khi user xoá chat. */
+const getSessionId = () => {
+    try {
+        let sid = localStorage.getItem(SESSION_KEY);
+        if (!sid) {
+            sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+            localStorage.setItem(SESSION_KEY, sid);
+        }
+        return sid;
+    } catch { return 'default'; }
+};
 
 // Load lịch sử chat từ localStorage
 const loadMessages = () => {
@@ -47,10 +61,20 @@ const AIChatbot = () => {
         }
     }, [messages, isOpen]);
 
-    // Xoá lịch sử chat
-    const clearChat = () => {
+    // Xoá lịch sử chat (cả FE display + BE conversation context)
+    const clearChat = async () => {
+        const sid = getSessionId();
         setMessages([defaultMessage]);
         localStorage.removeItem(STORAGE_KEY);
+        // Báo backend xoá history + tạo sessionId mới cho cuộc sau
+        try {
+            await fetch('http://localhost:8080/api/chat-ai/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: sid }),
+            });
+        } catch {}
+        localStorage.removeItem(SESSION_KEY);
     };
 
     const handleSendMessage = async () => {
@@ -67,7 +91,7 @@ const AIChatbot = () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ message: userMsg })
+                body: JSON.stringify({ message: userMsg, sessionId: getSessionId() })
             });
 
             if (response.ok) {

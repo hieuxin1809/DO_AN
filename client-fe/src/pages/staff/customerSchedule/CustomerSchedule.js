@@ -195,7 +195,7 @@ const CustomerSchedule = () => {
             <FontAwesomeIcon icon={faUsers} style={{ color: '#fff', fontSize: 20 }} />
           </div>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: T }}>Danh sách đăng ký</h2>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: T }}>Danh sách đăng ký tiêm</h2>
             <div style={{ fontSize: 13, color: T2 }}>Tổng {total} lượt đăng ký</div>
           </div>
         </div>

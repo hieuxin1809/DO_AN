@@ -162,6 +162,23 @@ public class UserApi {
         userRepository.save(user);
     }
 
+    /* ─── Admin tạo tài khoản theo từng role ─────────────────────────── */
+
+    @PostMapping("/admin/create-customer")
+    public ResponseEntity<?> adminCreateCustomer(@RequestBody CreateStaffAccountRequest req){
+        return new ResponseEntity<>(userService.adminCreateCustomer(req), HttpStatus.CREATED);
+    }
+
+    @PostMapping("/admin/create-doctor")
+    public ResponseEntity<?> adminCreateDoctor(@RequestBody CreateStaffAccountRequest req){
+        return new ResponseEntity<>(userService.adminCreateDoctor(req), HttpStatus.CREATED);
+    }
+
+    @PostMapping("/admin/create-nurse")
+    public ResponseEntity<?> adminCreateNurse(@RequestBody CreateStaffAccountRequest req){
+        return new ResponseEntity<>(userService.adminCreateNurse(req), HttpStatus.CREATED);
+    }
+
 
     @GetMapping("/admin/get-user-by-role")
     public ResponseEntity<?> getUserByRole(@RequestParam(value = "role", required = false) String role){

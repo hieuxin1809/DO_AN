@@ -13,33 +13,110 @@ const BG_INPUT = '#f8fafc';
 
 /* ── keep logic at module level (same as original) */
 var avatar = '';
+
+/* ─── Client-side validation ─────────────────────────── */
+function validateProfile(payload) {
+    const fullName = (payload.fullName || '').trim();
+    if (!fullName) return 'Vui lòng nhập họ và tên!';
+    if (fullName.length < 2) return 'Họ tên quá ngắn (tối thiểu 2 ký tự)!';
+
+    const phone = (payload.phone || '').trim();
+    if (!phone) return 'Vui lòng nhập số điện thoại!';
+    if (!/^(0|\+84)\d{9,10}$/.test(phone)) return 'Số điện thoại không hợp lệ! (VD: 0912345678)';
+
+    if (!payload.birthdate) return 'Vui lòng nhập ngày sinh!';
+    const dob = new Date(payload.birthdate);
+    if (isNaN(dob.getTime())) return 'Ngày sinh không hợp lệ!';
+    if (dob.getTime() > Date.now()) return 'Ngày sinh không thể là tương lai!';
+    const ageYears = (Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    if (ageYears > 130) return 'Ngày sinh không hợp lệ (tuổi quá lớn)!';
+
+    // CMND/CCCD: cho phép trống, nhưng nếu nhập thì phải đúng 9 hoặc 12 chữ số
+    const idCard = (payload.idCard || '').trim();
+    if (idCard && !/^\d{9}$|^\d{12}$/.test(idCard))
+        return 'Số CMND (9 chữ số) hoặc CCCD (12 chữ số) không hợp lệ!';
+
+    return null;
+}
+
+async function safeParseError(res) {
+    try {
+        const text = await res.text();
+        if (!text) return null;
+        try { return JSON.parse(text); } catch { return { defaultMessage: text }; }
+    } catch { return null; }
+}
+
 async function handleUpdateInfor(event) {
     event.preventDefault();
-    document.getElementById('loading-bar').style.display = 'block';
-    var LinkImg = await uploadSingleFile(document.getElementById('fileupload'));
-    if (LinkImg != null) { avatar = LinkImg; }
+
+    /* ─── Gom payload ───────────────────────────── */
     const payload = {
         fullName:  event.target.elements.fullname.value,
         gender:    event.target.elements.gender.value,
         birthdate: event.target.elements.birthdate.value,
-        phone:     event.target.elements.phone.value,
+        phone:     (event.target.elements.phone.value || '').trim(),
+        idCard:    (event.target.elements.idcard?.value || '').trim(),
         avatar,
         city:      event.target.elements.city.value,
         district:  event.target.elements.district.value,
         ward:      event.target.elements.ward.value,
         street:    event.target.elements.street.value,
     };
-    const res = await postMethodPayload('/api/customer-profile/customer/update-profile', payload);
-    if (res.status === 417) {
-        const result = await res.json();
-        toast.warning(result.defaultMessage);
+
+    /* ─── Validate phía client trước khi gọi API ── */
+    const clientErr = validateProfile(payload);
+    if (clientErr) { toast.warning(clientErr); return; }
+
+    document.getElementById('loading-bar').style.display = 'block';
+
+    try {
+        /* ─── Upload avatar (nếu có chọn file) ─── */
+        const fileEl = document.getElementById('fileupload');
+        if (fileEl?.files?.[0]) {
+            try {
+                const link = await uploadSingleFile(fileEl);
+                if (link) { avatar = link; payload.avatar = link; }
+            } catch (uerr) {
+                toast.error('Tải ảnh đại diện thất bại, vui lòng thử lại!');
+                console.error('upload avatar err:', uerr);
+                return;
+            }
+        }
+
+        const res = await postMethodPayload('/api/customer-profile/customer/update-profile', payload);
+
+        /* ─── Thành công ─── */
+        if (res.status >= 200 && res.status < 300) {
+            toast.success('Cập nhật thông tin thành công!');
+            await new Promise(r => setTimeout(r, 800));
+            window.location.reload();
+            return;
+        }
+
+        /* ─── Lỗi validate từ server (MessageException → 417) ─── */
+        if (res.status === 417) {
+            const result = await safeParseError(res);
+            toast.error(result?.defaultMessage || 'Dữ liệu không hợp lệ!');
+            return;
+        }
+
+        /* ─── Lỗi auth ─── */
+        if (res.status === 401 || res.status === 403) {
+            toast.error('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
+            return;
+        }
+
+        /* ─── Lỗi khác ─── */
+        const result = await safeParseError(res);
+        toast.error(result?.defaultMessage || `Cập nhật thất bại (HTTP ${res.status})`);
+    } catch (err) {
+        console.error('update profile err:', err);
+        toast.error('Không thể kết nối đến máy chủ. Vui lòng thử lại!');
+    } finally {
+        const lb = document.getElementById('loading-bar');
+        if (lb) lb.style.display = 'none';
     }
-    if (res.status < 300) {
-        toast.success('Cập nhật thông tin thành công');
-        await new Promise(r => setTimeout(r, 1000));
-        window.location.reload();
-    }
-    document.getElementById('loading-bar').style.display = 'none';
 }
 
 /* ── small helpers ───────────────────────────── */
@@ -126,6 +203,15 @@ function CapNhatThongTin() {
         getCustomer();
     }, []);
 
+    /* ─── Auto-populate danh sách Quận/Huyện khi đã có Tỉnh ────────
+       Trước đây list `huyen` rỗng đến khi user click lại Tỉnh,
+       khiến select Quận/Huyện mất options và hiển thị trống. ── */
+    useEffect(() => {
+        if (!tinh || !Array.isArray(address) || address.length === 0) return;
+        const found = address.find(a => a.name === tinh);
+        if (found) setHuyen(found.districts || []);
+    }, [tinh, address]);
+
     const loadHuyen = (option) => {
         for (let i = 0; i < address.length; i++) {
             if (address[i].name === option.value) {
@@ -134,6 +220,8 @@ function CapNhatThongTin() {
             }
         }
         setTinh(option.value);
+        // Khi đổi Tỉnh, reset Quận/Huyện đang chọn để tránh giữ giá trị cũ
+        setHuyenCs(null);
     };
 
     const clickChooseFile = () => document.getElementById('fileupload').click();
@@ -228,6 +316,17 @@ function CapNhatThongTin() {
                         </div>
 
                         <div>
+                            <FieldLabel>Số CMND / CCCD</FieldLabel>
+                            <StyledInput
+                                name="idcard"
+                                defaultValue={profile.idCard || ''}
+                                placeholder="9 hoặc 12 chữ số"
+                                maxLength={12}
+                                inputMode="numeric"
+                            />
+                        </div>
+
+                        <div>
                             <FieldLabel required>Ngày sinh</FieldLabel>
                             <StyledInput name="birthdate" type="date" defaultValue={profile.birthdate || ''} required />
                         </div>
@@ -272,7 +371,13 @@ function CapNhatThongTin() {
 
                         <div>
                             <FieldLabel>Quận / Huyện</FieldLabel>
-                            <StyledSelect name="district" id="district" defaultValue={huyencs || ''}>
+                            <StyledSelect
+                                name="district"
+                                id="district"
+                                value={huyencs || ''}
+                                onChange={(e) => setHuyenCs(e.target.value)}
+                            >
+                                <option value="">-- Chọn Quận / Huyện --</option>
                                 {huyen.map(h => (
                                     <option key={h.name} value={h.name}>{h.name}</option>
                                 ))}

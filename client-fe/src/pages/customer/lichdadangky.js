@@ -9,6 +9,7 @@ import vnpay from '../../assest/images/vnpay.jpg';
 import { formatMoney } from '../../services/money';
 import DoiLich from './doilich';
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
+import { downloadCertificatePdf } from '../../services/certificatePdf';
 
 const PAYPAL_CLIENT_ID = 'AfQvtYaXkCSyaDdKT_f-sY3ZChQm2CXDMx94N0W3XBscBmLG3TgGIT4UzINwxjbFAOG6w19I29dWjMOk';
 
@@ -144,19 +145,21 @@ function FilterInput({ id, type = 'text', placeholder, label, style }) {
 }
 
 /* ── action button helper ────────────────────── */
-function ActionBtn({ color, bg, border, onClick, children }) {
+function ActionBtn({ color, bg, border, onClick, children, disabled }) {
     const [hov, setHov] = useState(false);
     return (
         <button
+            disabled={disabled}
             onClick={onClick}
-            onMouseEnter={() => setHov(true)}
+            onMouseEnter={() => !disabled && setHov(true)}
             onMouseLeave={() => setHov(false)}
             style={{
                 padding: '5px 13px', borderRadius: '8px', fontSize: '12px',
                 fontWeight: '600', border: `1.5px solid ${hov ? color : (border || color)}`,
                 background: hov ? color : (bg || 'transparent'),
                 color: hov ? '#fff' : color,
-                cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s',
+                cursor: disabled ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s',
+                opacity: disabled ? 0.6 : 1,
             }}
         >
             {children}
@@ -280,6 +283,28 @@ function LichDaDangKy() {
         setpageCount(result.totalPages);
         url = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&page=';
     };
+
+    /* ── Tải giấy xác nhận tiêm chủng (PDF) ─── */
+    const [downloadingCertId, setDownloadingCertId] = useState(null);
+    async function downloadCert(item) {
+        try {
+            setDownloadingCertId(item.id);
+            const res = await getMethod(`/api/certificate/customer/by-schedule/${item.id}`);
+            if (res.status >= 300) {
+                const j = await res.json().catch(() => ({}));
+                toast.error(j.defaultMessage || 'Không tải được giấy xác nhận!');
+                return;
+            }
+            const cert = await res.json();
+            await downloadCertificatePdf(cert);
+            toast.success('Đã tải giấy xác nhận!');
+        } catch (err) {
+            console.error('downloadCert error:', err);
+            toast.error('Tạo PDF thất bại!');
+        } finally {
+            setDownloadingCertId(null);
+        }
+    }
 
     /* ── unchanged handler functions ─────────── */
     async function huyTiem(id) {
@@ -472,7 +497,7 @@ function LichDaDangKy() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px', color: TEXT }}>
                     <thead>
                         <tr style={{ background: `linear-gradient(90deg, ${PRIMARY} 0%, #1e4fad 100%)`, color: '#fff' }}>
-                            {['Mã ĐK', 'Vaccine', 'Trung tâm', 'Ngày đăng ký', 'Ngày tiêm', 'Thanh toán', 'Trạng thái', 'Tình trạng SK', 'Chức năng', 'Phản hồi', 'Hủy lịch'].map((h, i) => (
+                            {['Mã ĐK', 'Vaccine', 'Trung tâm', 'Ngày đăng ký', 'Ngày tiêm', 'Thanh toán', 'Trạng thái', 'Tình trạng SK', 'Chức năng', 'Phản hồi', 'Giấy xác nhận', 'Hủy lịch'].map((h, i) => (
                                 <th key={i} style={{ padding: '12px 14px', fontWeight: '700', whiteSpace: 'nowrap', textAlign: 'left', fontSize: '12px', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                                     {h}
                                 </th>
@@ -559,6 +584,18 @@ function LichDaDangKy() {
                                         )}
                                     </td>
                                     <td style={{ padding: '12px 14px' }}>
+                                        {(item.statusCustomerSchedule === 'injected' ||
+                                          item.statusCustomerSchedule === 'finished') && (
+                                            <ActionBtn
+                                                color="#0284c7"
+                                                onClick={() => downloadCert(item)}
+                                                disabled={downloadingCertId === item.id}
+                                            >
+                                                {downloadingCertId === item.id ? '⏳ Đang tải...' : '📄 Tải PDF'}
+                                            </ActionBtn>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: '12px 14px' }}>
                                         {item.statusCustomerSchedule !== 'cancelled' &&
                                          item.statusCustomerSchedule !== 'finished' &&
                                          item.statusCustomerSchedule !== 'injected' &&
@@ -577,7 +614,7 @@ function LichDaDangKy() {
                         })}
                         {customerSchedule.length === 0 && (
                             <tr>
-                                <td colSpan={11} style={{ padding: '48px', textAlign: 'center', color: TEXT_2 }}>
+                                <td colSpan={12} style={{ padding: '48px', textAlign: 'center', color: TEXT_2 }}>
                                     <div style={{ fontSize: '32px', marginBottom: '12px' }}>📋</div>
                                     Chưa có lịch tiêm nào
                                 </td>

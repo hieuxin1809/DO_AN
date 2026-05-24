@@ -3,10 +3,10 @@ import ReactPaginate from 'react-paginate';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Swal from 'sweetalert2';
-import { getMethod, deleteMethod, putMethod, uploadSingleFile } from '../../services/request';
+import { getMethod, putMethod, uploadSingleFile } from '../../services/request';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faUsers, faSearch, faEdit, faTrash, faEye, faX,
+  faUsers, faSearch, faEdit, faEye, faX,
   faMapPin, faPhone,
 } from '@fortawesome/free-solid-svg-icons';
 
@@ -130,20 +130,6 @@ const AdminKhachHang = () => {
   };
 
   const handlePageClick = ({ selected }) => fetchPage(selected);
-
-  const handleDelete = async (id, name) => {
-    const { isConfirmed } = await Swal.fire({
-      title: 'Xóa khách hàng?',
-      html: `Bạn có chắc muốn xóa <strong>${name}</strong>?`,
-      icon: 'warning', showCancelButton: true,
-      confirmButtonColor: D, confirmButtonText: 'Xóa', cancelButtonText: 'Hủy',
-    });
-    if (!isConfirmed) return;
-    const res = await deleteMethod(`/api/customer-profile/admin/delete/${id}`);
-    if (res.status < 300)       { toast.success('Xóa thành công!'); fetchPage(0); }
-    else if (res.status === 417){ const d = await res.json(); toast.warning(d.defaultMessage); }
-    else                         toast.error('Xóa thất bại!');
-  };
 
   const handleEditClick = async (item) => {
     setEditCustomer({ ...item });
@@ -370,15 +356,6 @@ const AdminKhachHang = () => {
                         onMouseEnter={e => { e.currentTarget.style.background = W; e.currentTarget.style.color = '#fff'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = `${W}11`; e.currentTarget.style.color = W; }}>
                         <FontAwesomeIcon icon={faEdit} />
-                      </button>
-                      {/* delete */}
-                      <button onClick={() => handleDelete(item.id, item.fullName)} title="Xóa" style={{
-                        width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: `1.5px solid ${D}22`, background: `${D}11`, color: D, cursor: 'pointer', fontSize: 14, transition: 'all .15s',
-                      }}
-                        onMouseEnter={e => { e.currentTarget.style.background = D; e.currentTarget.style.color = '#fff'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = `${D}11`; e.currentTarget.style.color = D; }}>
-                        <FontAwesomeIcon icon={faTrash} />
                       </button>
                     </div>
                   </td>

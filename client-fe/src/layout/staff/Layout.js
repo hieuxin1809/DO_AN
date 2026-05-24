@@ -12,8 +12,8 @@ const NAV = [
   { href: "chat", icon: "fa-envelope", label: "Tin nhắn" },
   { href: "vaccine", icon: "fa-medkit", label: "Quản lý vaccine" },
   { href: "vaccine-inventory", icon: "fa-hospital-o", label: "Kho vaccine" },
-  { href: "customer-schedule", icon: "fa-list", label: "Danh sách đăng ký" },
-  { href: "customer-schedule-1", icon: "fa-calendar", label: "Lịch tiêm & KH" },
+  { href: "customer-schedule", icon: "fa-list", label: "Danh sách đăng ký tiêm" },
+  { href: "customer-schedule-1", icon: "fa-calendar", label: "Quản lý đợt tiêm" },
   {
     href: "lich-tiem-chung",
     icon: "fa-calendar-check-o",

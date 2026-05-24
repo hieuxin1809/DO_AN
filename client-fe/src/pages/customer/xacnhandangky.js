@@ -236,6 +236,7 @@ function XacNhanDangky() {
             fullName: patientInfo.fullName,
             dob:      patientInfo.dob,
             phone:    patientInfo.phone,
+            idCard:   patientInfo.idCard,
             address:  patientInfo.address,
             vaccineScheduleTime: { id: vaccineTime.id },
             bookingForOther: bookingForOther,
@@ -472,6 +473,7 @@ function XacNhanDangky() {
                                         <div style={{ padding:'18px 22px' }}>
                                             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px 22px' }}>
                                                 <InfoField label="Họ tên" value={patientInfo?.fullName} />
+                                                <InfoField label="Số CMND/CCCD" value={patientInfo?.idCard} />
                                                 <InfoField label="Ngày sinh" value={patientInfo?.dob} />
                                                 <InfoField label="Số điện thoại" value={patientInfo?.phone} />
                                                 <InfoField label="Địa chỉ" value={patientInfo?.address} />

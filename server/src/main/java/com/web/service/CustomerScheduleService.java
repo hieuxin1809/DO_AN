@@ -93,6 +93,9 @@ public class CustomerScheduleService {
     private MailService mailService;
 
     @Autowired
+    private VaccinationCertificateService vaccinationCertificateService;
+
+    @Autowired
     private VaccinePersonalizationService vaccinePersonalizationService;
 
     @Autowired
@@ -322,6 +325,19 @@ public class CustomerScheduleService {
         }
         customerScheduleRepository.save(customerSchedule);
         sendEmailToCustomer(customerSchedule);
+
+        /* ─── Auto cấp giấy xác nhận tiêm chủng khi inject/finished ─── */
+        if (newStatus == StatusCustomerSchedule.injected
+                || newStatus == StatusCustomerSchedule.finished) {
+            try {
+                VaccinationCertificate cert = vaccinationCertificateService.generateAfterInjection(customerSchedule.getId());
+                vaccinationCertificateService.sendCertificateEmail(cert);
+            } catch (Exception ex) {
+                System.err.println("[Cert] Không tạo được giấy xác nhận: " + ex.getMessage());
+                // Không throw — không làm fail flow duyệt chính
+            }
+        }
+
         return ApproveCustomerScheduleResponse.builder().status(request.getStatus()).build();
     }
 

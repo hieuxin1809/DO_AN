@@ -400,4 +400,50 @@ public class EmailTemplateUtils {
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
+
+    // ─────────────────────────────────────────────
+    //  CERTIFICATE ISSUED
+    // ─────────────────────────────────────────────
+
+    public static String certificateIssued(String customerName, String vaccineName,
+                                           String serialNo, String verifyUrl, String downloadHint) {
+        String header = buildHeader("&#128221; Gi&#7845;y x&#225;c nh&#7853;n ti&#234;m ch&#7911;ng");
+
+        StringBuilder body = new StringBuilder();
+        body.append(buildGreeting(customerName != null ? customerName : "Qu&#253; kh&#225;ch"));
+        body.append("<p style=\"margin:12px 0 20px;font-size:14px;color:#475569;line-height:1.7;\">")
+            .append("Ch&#250;c m&#7915;ng b&#7841;n &#273;&#227; ho&#224;n th&#224;nh mũi tiêm <strong style=\"color:#0284c7;\">")
+            .append(vaccineName != null ? vaccineName : "vaccine")
+            .append("</strong>. Gi&#7845;y x&#225;c nh&#7853;n ti&#234;m ch&#7911;ng &#273;&#227; &#273;&#432;&#7907;c c&#7845;p:")
+            .append("</p>");
+
+        body.append("<div style=\"text-align:center;margin:24px 0;background:#f0f9ff;border:2px dashed #0ea5e9;border-radius:12px;padding:24px;\">");
+        body.append("<p style=\"margin:0 0 8px;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;\">M&#227; gi&#7845;y x&#225;c nh&#7853;n</p>");
+        body.append("<p style=\"margin:0;font-family:'Courier New',Courier,monospace;font-size:24px;font-weight:900;color:#0284c7;letter-spacing:2px;\">")
+            .append(serialNo != null ? serialNo : "—")
+            .append("</p>");
+        body.append("</div>");
+
+        body.append("<p style=\"margin:20px 0 12px;font-size:14px;color:#475569;line-height:1.7;\">")
+            .append("&#128205; <strong>T&#7843;i file PDF:</strong> Truy c&#7853;p trang <em>L&#7883;ch &#273;&#227; &#273;&#259;ng k&#253;</em> trong t&#224;i kho&#7843;n c&#7911;a b&#7841;n &#273;&#7875; t&#7843;i gi&#7845;y x&#225;c nh&#7853;n.")
+            .append("</p>");
+        body.append(buildCtaButton(downloadHint, "&#128190; T&#7843;i gi&#7845;y x&#225;c nh&#7853;n", "#0284c7"));
+
+        body.append("<p style=\"margin:20px 0 12px;font-size:14px;color:#475569;line-height:1.7;\">")
+            .append("&#128270; <strong>Ki&#7875;m tra t&#237;nh h&#7907;p l&#7879;:</strong> B&#7845;t k&#7923; ai c&#243; QR code ho&#7863;c m&#227; gi&#7845;y &#273;&#7873;u c&#243; th&#7875; verify online:")
+            .append("</p>");
+        body.append("<div style=\"text-align:center;margin:14px 0 22px;\">");
+        body.append("<a href=\"").append(verifyUrl).append("\" style=\"color:#0ea5e9;font-size:13px;text-decoration:none;word-break:break-all;\">")
+            .append(verifyUrl).append("</a>");
+        body.append("</div>");
+
+        body.append("<div style=\"background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;\">");
+        body.append("<p style=\"margin:0;font-size:13px;color:#92400e;\">&#9888; <strong>L&#432;u &#253;:</strong> Gi&#7845;y x&#225;c nh&#7853;n c&#243; gi&#225; tr&#7883; v&#7899;i ch&#7919; k&#253; s&#7889; (hash). N&#7871;u file b&#7883; ch&#7881;nh s&#7917;a, h&#7879; th&#7889;ng s&#7869; t&#7921; nh&#7853;n di&#7879;n l&#224; kh&#244;ng h&#7907;p l&#7879;.</p>");
+        body.append("</div>");
+
+        body.append(buildDivider());
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">C&#7843;m &#417;n b&#7841;n &#273;&#227; tin t&#432;&#7903;ng iVaccine!</p>");
+
+        return assemble(header, wrapBody(body.toString()), buildFooter());
+    }
 }

@@ -16,7 +16,6 @@ import AddCenterAdmin from "../pages/admin/addcenter";
 import login from "../pages/public/login";
 import register from '../pages/public/register';
 import signin from '../pages/public/signin';
-import nhanvienAdmin from "../pages/admin/nhanvien";
 import khachHangAdmin from "../pages/admin/khachhang";
 import employeeAdmin from "../pages/admin/employee";
 import AdminPhanHoi from "../pages/admin/phanHoi";
@@ -29,6 +28,7 @@ import QuenMatKhau from "../pages/public/quenmatkhau";
 import DatLaiMatKhau from "../pages/public/datlaimatkhau";
 import VaccineDanhMuc from "../pages/public/vaccinedanhmuc";
 import ThongTinVaccine from "../pages/public/thongtinvaccine";
+import VerifyCert from "../pages/public/verifycert";
 
 //customer
 import dangkytiemchung from "../pages/customer/dangkytiemchung";
@@ -62,6 +62,7 @@ const publicRoutes = [
     { path: "/datlaimatkhau", component: DatLaiMatKhau },
     {path: "/vaccine-danhmuc", component: VaccineDanhMuc},
     {path: "/thong-tin-vaccine", component: ThongTinVaccine},
+    {path: "/verify/:serial", component: VerifyCert, layout: null},
 ];
 
 const customerRoutes = [
@@ -75,7 +76,6 @@ const customerRoutes = [
 const adminRoutes = [
     {path: "/admin/index", component: homeAdmin, layout: layoutAdmin},
     {path: "/admin/user", component: userAdmin, layout: layoutAdmin},
-    { path: "/admin/nhanvien", component: nhanvienAdmin, layout: layoutAdmin },
     { path: "/admin/danhmuc", component: AdminDanhMuc, layout: layoutAdmin },
     { path: "/admin/adddanhmuc", component: AdminAddDanhMuc, layout: layoutAdmin },
     { path: "/admin/center", component: CenterAdmin, layout: layoutAdmin },

@@ -3,12 +3,19 @@ package com.web.service;
 import com.web.entity.Authority;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.web.dto.CreateStaffAccountRequest;
 import com.web.dto.CustomUserDetails;
 import com.web.dto.TokenDto;
 import com.web.dto.UserRequest;
 import com.web.dto.UserUpdate;
 import com.web.entity.CustomerProfile;
+import com.web.entity.Doctor;
+import com.web.entity.Nurse;
 import com.web.entity.User;
+import com.web.repository.DoctorRepository;
+import com.web.repository.NurseRepository;
+import org.springframework.transaction.annotation.Transactional;
+import java.sql.Timestamp;
 import com.web.enums.UserType;
 import com.web.exception.MessageException;
 import com.web.jwt.JwtTokenProvider;
@@ -51,6 +58,121 @@ public class UserService {
 
     @Autowired
     private CustomerProfileRepository customerProfileRepository;
+
+    @Autowired
+    private DoctorRepository doctorRepository;
+
+    @Autowired
+    private NurseRepository nurseRepository;
+
+    /* ─── Validate chung cho admin tạo Doctor / Nurse ───────────────── */
+    private void validateStaffRequest(CreateStaffAccountRequest req, String roleLabel) {
+        if (req == null) throw new MessageException("Dữ liệu rỗng");
+        if (req.getEmail() == null || req.getEmail().trim().isEmpty())
+            throw new MessageException("Vui lòng nhập email!");
+        if (!req.getEmail().matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))
+            throw new MessageException("Email không hợp lệ!");
+        if (req.getPassword() == null || req.getPassword().length() < 6)
+            throw new MessageException("Mật khẩu tối thiểu 6 ký tự!");
+        if (req.getFullName() == null || req.getFullName().trim().isEmpty())
+            throw new MessageException("Vui lòng nhập họ tên!");
+        if (req.getPhone() == null || !req.getPhone().trim().matches("^(0|\\+84)\\d{9,10}$"))
+            throw new MessageException("Số điện thoại không hợp lệ! (VD: 0912345678)");
+
+        userRepository.findByEmail(req.getEmail()).ifPresent(u -> {
+            throw new MessageException("Email '" + req.getEmail() + "' đã được sử dụng!");
+        });
+    }
+
+    /* ─── Admin tạo tài khoản Bác sĩ ────────────────────────────────── */
+    @Transactional
+    public Doctor adminCreateDoctor(CreateStaffAccountRequest req) {
+        validateStaffRequest(req, "Bác sĩ");
+
+        User user = new User();
+        user.setEmail(req.getEmail().trim());
+        user.setPassword(passwordEncoder.encode(req.getPassword()));
+        user.setPhoneNumber(req.getPhone().trim());
+        user.setUserType(UserType.standard);
+        user.setActived(true);          // admin tạo → active luôn, không cần email kích hoạt
+        user.setCreatedDate(new Date(System.currentTimeMillis()));
+        user.setAuthorities(authorityRepository.findByName(Contains.ROLE_DOCTOR));
+        userRepository.save(user);
+
+        Doctor doctor = new Doctor();
+        doctor.setUser(user);
+        doctor.setFullName(req.getFullName().trim());
+        doctor.setSpecialization(req.getSpecialization());
+        doctor.setExperienceYears(req.getExperienceYears());
+        doctor.setBio(req.getBio());
+        doctor.setAvatar(req.getAvatar());
+        doctor.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+        return doctorRepository.save(doctor);
+    }
+
+    /* ─── Admin tạo tài khoản Y tá ──────────────────────────────────── */
+    @Transactional
+    public Nurse adminCreateNurse(CreateStaffAccountRequest req) {
+        validateStaffRequest(req, "Y tá");
+
+        User user = new User();
+        user.setEmail(req.getEmail().trim());
+        user.setPassword(passwordEncoder.encode(req.getPassword()));
+        user.setPhoneNumber(req.getPhone().trim());
+        user.setUserType(UserType.standard);
+        user.setActived(true);
+        user.setCreatedDate(new Date(System.currentTimeMillis()));
+        user.setAuthorities(authorityRepository.findByName(Contains.ROLE_NURSE));
+        userRepository.save(user);
+
+        Nurse nurse = new Nurse();
+        nurse.setUser(user);
+        nurse.setFullName(req.getFullName().trim());
+        nurse.setQualification(req.getQualification());
+        nurse.setExperienceYears(req.getExperienceYears());
+        nurse.setBio(req.getBio());
+        nurse.setAvatar(req.getAvatar());
+        nurse.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+        return nurseRepository.save(nurse);
+    }
+
+    /* ─── Admin tạo tài khoản Khách hàng (active luôn, không cần email kích hoạt) ── */
+    @Transactional
+    public User adminCreateCustomer(CreateStaffAccountRequest req) {
+        if (req == null) throw new MessageException("Dữ liệu rỗng");
+        if (req.getEmail() == null || !req.getEmail().matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))
+            throw new MessageException("Email không hợp lệ!");
+        if (req.getPassword() == null || req.getPassword().length() < 6)
+            throw new MessageException("Mật khẩu tối thiểu 6 ký tự!");
+        if (req.getPhone() != null && !req.getPhone().isEmpty()
+                && !req.getPhone().matches("^(0|\\+84)\\d{9,10}$"))
+            throw new MessageException("Số điện thoại không hợp lệ!");
+
+        userRepository.findByEmail(req.getEmail()).ifPresent(u -> {
+            throw new MessageException("Email '" + req.getEmail() + "' đã được sử dụng!");
+        });
+
+        User user = new User();
+        user.setEmail(req.getEmail().trim());
+        user.setPassword(passwordEncoder.encode(req.getPassword()));
+        user.setPhoneNumber(req.getPhone());
+        user.setUserType(UserType.standard);
+        user.setActived(true);
+        user.setCreatedDate(new Date(System.currentTimeMillis()));
+        user.setAuthorities(authorityRepository.findByName(Contains.ROLE_CUSTOMER));
+        User saved = userRepository.save(user);
+
+        // Tạo luôn CustomerProfile khung để có chỗ chứa fullName / địa chỉ về sau
+        if (req.getFullName() != null && !req.getFullName().trim().isEmpty()) {
+            CustomerProfile cp = new CustomerProfile();
+            cp.setUser(saved);
+            cp.setFullName(req.getFullName().trim());
+            cp.setPhone(req.getPhone());
+            cp.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+            customerProfileRepository.save(cp);
+        }
+        return saved;
+    }
 
     public TokenDto login(String email, String password) throws Exception {
         Optional<User> users = userRepository.findByEmail(email);

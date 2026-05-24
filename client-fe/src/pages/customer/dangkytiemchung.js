@@ -205,6 +205,7 @@ function DangKyTiem() {
     const [patientDob,     setPatientDob]     = useState('');
     const [patientPhone,   setPatientPhone]   = useState('');
     const [patientAddress, setPatientAddress] = useState('');
+    const [patientIdCard,  setPatientIdCard]  = useState('');
     const [profileLoaded,  setProfileLoaded]  = useState(false); // đã load profile của user login chưa
 
     useEffect(() => {
@@ -243,6 +244,7 @@ function DangKyTiem() {
                     setPatientName(p.fullName || '');
                     setPatientDob(p.birthdate ? String(p.birthdate).split('T')[0] : '');
                     setPatientPhone(p.phone || '');
+                    setPatientIdCard(p.idCard || '');
                     const addr = [p.street, p.ward, p.district, p.city].filter(Boolean).join(', ');
                     setPatientAddress(addr);
                 }
@@ -260,6 +262,7 @@ function DangKyTiem() {
             setPatientDob('');
             setPatientPhone('');
             setPatientAddress('');
+            setPatientIdCard('');
         } else if (profileLoaded) {
             // Re-fill từ profile khi quay lại 'self'
             (async () => {
@@ -271,6 +274,7 @@ function DangKyTiem() {
                     setPatientName(p.fullName || '');
                     setPatientDob(p.birthdate ? String(p.birthdate).split('T')[0] : '');
                     setPatientPhone(p.phone || '');
+                    setPatientIdCard(p.idCard || '');
                     const addr = [p.street, p.ward, p.district, p.city].filter(Boolean).join(', ');
                     setPatientAddress(addr);
                 } catch (e) {}
@@ -341,6 +345,10 @@ function DangKyTiem() {
         }
         if (!patientPhone || !/^[0-9+\-\s()]{8,15}$/.test(patientPhone.trim())) {
             toast.error('Số điện thoại không hợp lệ');
+            return false;
+        }
+        if (!patientIdCard || !/^\d{9}$|^\d{12}$/.test(patientIdCard.trim())) {
+            toast.error('Số CMND (9 chữ số) hoặc CCCD (12 chữ số) không hợp lệ');
             return false;
         }
         if (!patientAddress || patientAddress.trim().length < 3) {
@@ -459,6 +467,7 @@ function DangKyTiem() {
             fullName: patientName.trim(),
             dob:      patientDob,
             phone:    patientPhone.trim(),
+            idCard:   patientIdCard.trim(),
             address:  patientAddress.trim(),
             bookingForOther: bookingFor === 'other',
         };
@@ -659,6 +668,23 @@ function DangKyTiem() {
                                 <input
                                     type="tel" value={patientPhone} onChange={e => setPatientPhone(e.target.value)}
                                     placeholder="0123456789"
+                                    style={{
+                                        width:'100%', padding:'12px 14px', borderRadius:'12px',
+                                        border:`1.5px solid ${BORDER}`, background:'#fff',
+                                        fontSize:'14px', color:TEXT, outline:'none', boxSizing:'border-box',
+                                    }}
+                                    onFocus={e => e.target.style.borderColor = ACCENT}
+                                    onBlur={e  => e.target.style.borderColor = BORDER}
+                                />
+                            </div>
+                            <div>
+                                <FieldLabel>Số CMND / CCCD</FieldLabel>
+                                <input
+                                    type="text" value={patientIdCard}
+                                    onChange={e => setPatientIdCard(e.target.value.replace(/\D/g, ''))}
+                                    placeholder="9 hoặc 12 chữ số"
+                                    maxLength={12}
+                                    inputMode="numeric"
                                     style={{
                                         width:'100%', padding:'12px 14px', borderRadius:'12px',
                                         border:`1.5px solid ${BORDER}`, background:'#fff',
