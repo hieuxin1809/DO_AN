@@ -252,6 +252,33 @@ public class VaccinationCertificateService {
     }
 
     /* ──────────────────────────────────────────────────────────────
+       Admin: thu hồi giấy với lý do
+       ────────────────────────────────────────────────────────────── */
+    @Transactional
+    public VaccinationCertificate revokeCert(Long certId, String reason, String revokedByEmail) {
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new MessageException("Vui lòng nhập lý do thu hồi!");
+        }
+        VaccinationCertificate cert = certRepository.findById(certId)
+                .orElseThrow(() -> new MessageException("Không tìm thấy giấy xác nhận!"));
+        if (Boolean.TRUE.equals(cert.getRevoked())) {
+            throw new MessageException("Giấy này đã bị thu hồi từ trước!");
+        }
+        cert.setRevoked(true);
+        cert.setRevokedReason(reason.trim());
+        cert.setRevokedBy(revokedByEmail);
+        cert.setRevokedDate(new Timestamp(System.currentTimeMillis()));
+        return certRepository.save(cert);
+    }
+
+    /* ──────────────────────────────────────────────────────────────
+       Admin: tìm cert theo ID (cho trang chi tiết)
+       ────────────────────────────────────────────────────────────── */
+    public Optional<VaccinationCertificate> findById(Long id) {
+        return certRepository.findById(id);
+    }
+
+    /* ──────────────────────────────────────────────────────────────
        Gửi email thông báo + link tải giấy
        ────────────────────────────────────────────────────────────── */
     public void sendCertificateEmail(VaccinationCertificate cert) {

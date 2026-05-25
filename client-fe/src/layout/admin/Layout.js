@@ -1,113 +1,218 @@
-import { handleChangePass } from '../../services/auth';
-import lich from '../../assest/images/lich.png';
-import avatar from '../../assest/images/user.svg';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from "react";
+import avatar from "../../assest/images/user.svg";
 
-function Header({ children }) {
-    const [isCssLoaded, setCssLoaded] = useState(false);
-    const [showDropdown, setShowDropdown] = useState(false);
+const P  = "#2A388F";
+const A  = "#0ea5e9";
+const S  = "#10b981";
+const B  = "#e2e8f0";
+const T  = "#1e293b";
+const T2 = "#64748b";
 
-    useEffect(() => {
-        import('../admin/layout.scss').then(() => setCssLoaded(true));
-    }, []);
-
-    return (
-        <>
-            {/* Left Navigation Bar */}
-            <div className="navleft">
-                <div className="divroot">
-                    <img src={avatar} alt="Avatar" className="admin-avatar" />
-                    <div className="name-status">
-                        <h4>Admin</h4>
-                        <span className="online-status">
-                            <i className="fa fa-circle"></i> Online
-                        </span>
-                    </div>
-                </div>
-                <div className="listmenumain">
-                    <a href="index">
-                        <i className="fa fa-home"></i> Trang chủ
-                    </a>
-                    <a href="user">
-                        <i className="fa fa-user"></i> Quản lí quyền
-                    </a>
-                    <a href="danhmuc">
-                        <i className="fa fa-list"></i> Danh mục
-                    </a>
-                    <a href="center">
-                        <i className="fa fa-hospital-o"></i> Quản lý trung tâm
-                    </a>
-                    <a href="lich-tiem-chung">
-                        <i className="fa fa-calendar-check-o"></i> Lịch tiêm chủng
-                    </a>
-                    <a href="khach-hang">
-                        <i className="fa fa-users"></i> Quản lý khách hàng
-                    </a>
-                    <a href="nhan-vien">
-                        <i className="fa fa-user-md"></i> Quản lý bác sỹ, y tá
-                    </a>
-                    <a href="nhanvien">
-                        <i className="fa fa-calendar"></i> Lịch làm việc nhân viên
-                    </a>
-                    <a href="phan-hoi">
-                        <i className="fa fa-comments"></i> Phản hồi khách hàng
-                    </a>
-                </div>
-            </div>
-
-            {/* Header Section */}
-            <div className="header">
-                <div className="header-left"></div>
-                <div className="header-right">
-                    <div className="profile" style={{position: 'relative'}}>
-                        <a
-                            className="nav-link d-flex align-items-center"
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); setShowDropdown(!showDropdown); }}
-                            style={{cursor: 'pointer'}}
-                        >
-                            <span className="tendangnhap" style={{marginRight: '10px'}}>Admin</span>
-                            <img src={avatar} className="userlogo-admin" alt="Avatar" style={{marginRight: '10px'}} />
-                            <i className="fa fa-caret-down" style={{fontSize: '16px', color: '#555'}}></i>
-                        </a>
-                        {showDropdown && (
-                            <div className="dropdown-menu show" style={{display: 'block', position: 'absolute', right: 0, top: '100%', minWidth: '150px', backgroundColor: '#fff', boxShadow: '0 4px 8px rgba(0,0,0,0.1)', border: '1px solid #ddd', borderRadius: '4px', zIndex: 1000}}>
-                                <a className="dropdown-item" href="#" onClick={(e) => { e.preventDefault(); logout(); }} style={{padding: '10px 15px', color: '#d9534f', display: 'flex', alignItems: 'center'}}>
-                                    <i className="fa fa-sign-out" style={{marginRight: '8px', fontSize: '16px'}}></i> Đăng xuất
-                                </a>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Content Section */}
-            <div className="contentadminweb">
-                <div className="contentmain">
-                    <div className="table-section">{children}</div>
-                </div>
-            </div>
-        </>
-    );
-}
-
-async function checkAdmin() {
-    var token = localStorage.getItem("token");
-    var url = 'http://localhost:8080/api/admin/check-role-admin';
-    const response = await fetch(url, {
-        headers: new Headers({
-            'Authorization': 'Bearer ' + token,
-        }),
-    });
-    if (response.status > 300) {
-        window.location.replace('../');
-    }
-}
+const NAV = [
+  { href: "index",           icon: "fa-home",             label: "Trang chủ" },
+  { href: "user",            icon: "fa-user",             label: "Quản lý tài khoản" },
+  { href: "danhmuc",         icon: "fa-list",             label: "Quản lý danh mục" },
+  { href: "center",          icon: "fa-hospital-o",       label: "Quản lý trung tâm" },
+  { href: "lich-tiem-chung", icon: "fa-calendar-check-o", label: "Lịch tiêm chủng" },
+  { href: "khach-hang",      icon: "fa-users",            label: "Quản lý khách hàng" },
+  { href: "nhan-vien",       icon: "fa-user-md",          label: "Quản lý bác sỹ, y tá" },
+  { href: "phan-hoi",        icon: "fa-comments",         label: "Phản hồi khách hàng" },
+  { href: "certificates",    icon: "fa-certificate",      label: "Giấy chứng nhận" },
+  { href: "reminders",       icon: "fa-bell",             label: "Hệ thống nhắc lịch" },
+];
 
 function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.replace('../');
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  window.location.replace("../");
+}
+
+function Header({ children }) {
+  const [dropOpen, setDropOpen] = useState(false);
+  const dropRef = useRef(null);
+
+  /* close dropdown when clicking outside */
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const user = (() => {
+    try { return JSON.parse(localStorage.getItem("user") || "{}"); }
+    catch { return {}; }
+  })();
+  const displayName = user.fullName || user.email || "Admin";
+
+  /* highlight active link */
+  const currentSlug = window.location.pathname.split("/").filter(Boolean).pop() || "";
+
+  return (
+    <>
+      {/* ── Sidebar ── */}
+      <div style={{
+        position: "fixed", top: 0, left: 0, height: "100vh", width: 240,
+        background: `linear-gradient(180deg, ${T} 0%, #0f172a 100%)`,
+        display: "flex", flexDirection: "column", zIndex: 200,
+        boxShadow: "4px 0 20px rgba(0,0,0,.18)",
+      }}>
+        {/* brand */}
+        <div style={{ padding: "20px 22px 16px", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12,
+              background: `linear-gradient(135deg,${P},${A})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: `0 4px 12px rgba(42,56,143,.4)`, flexShrink: 0,
+            }}>
+              <i className="fa fa-hospital-o" style={{ color: "#fff", fontSize: 17 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: ".3px" }}>
+                Ivaccine
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,.45)", marginTop: 1 }}>
+                Quản Trị Hệ Thống
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* nav items */}
+        <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
+          {NAV.map((item) => {
+            const active = currentSlug === item.href;
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                style={{
+                  display: "flex", alignItems: "center", gap: 11,
+                  padding: "10px 14px", borderRadius: 10, marginBottom: 3,
+                  textDecoration: "none", transition: "all .15s",
+                  background: active ? `linear-gradient(135deg,${P},${A})` : "transparent",
+                  color: active ? "#fff" : "rgba(255,255,255,.65)",
+                  boxShadow: active ? `0 3px 10px rgba(42,56,143,.4)` : "none",
+                  fontWeight: active ? 700 : 500, fontSize: 13.5,
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) e.currentTarget.style.background = "rgba(255,255,255,.06)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <i className={`fa ${item.icon}`}
+                  style={{ fontSize: 15, width: 18, textAlign: "center", flexShrink: 0 }} />
+                {item.label}
+              </a>
+            );
+          })}
+        </nav>
+
+        {/* footer */}
+        <div style={{ padding: "12px 10px", borderTop: "1px solid rgba(255,255,255,.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px" }}>
+            <img src={avatar} alt=""
+              style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 12.5, fontWeight: 700, color: "#fff",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {displayName}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%",
+                  background: S, display: "inline-block" }} />
+                <span style={{ fontSize: 11, color: S }}>Online</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Top Header ── */}
+      <div style={{
+        position: "fixed", top: 0, left: 240, right: 0, height: 60,
+        background: "#fff", borderBottom: `1px solid ${B}`,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 24px", zIndex: 190, boxShadow: "0 1px 8px rgba(0,0,0,.05)",
+      }}>
+        {/* breadcrumb */}
+        <div style={{ fontSize: 14, fontWeight: 600, color: T2 }}>
+          <span style={{ color: T2 }}>Admin </span>
+          <span style={{ color: B, margin: "0 6px" }}>›</span>
+          <span style={{ color: T }}>
+            {NAV.find((n) => n.href === currentSlug)?.label || "Dashboard"}
+          </span>
+        </div>
+
+        {/* profile dropdown */}
+        <div ref={dropRef} style={{ position: "relative" }}>
+          <button
+            onClick={() => setDropOpen(!dropOpen)}
+            style={{
+              display: "flex", alignItems: "center", gap: 9, padding: "6px 12px",
+              background: dropOpen ? "#f1f5f9" : "#fff",
+              border: `1px solid ${B}`, borderRadius: 10, cursor: "pointer",
+              transition: "all .15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
+            onMouseLeave={(e) => { if (!dropOpen) e.currentTarget.style.background = "#fff"; }}
+          >
+            <img src={avatar} alt="" style={{ width: 28, height: 28, borderRadius: 7 }} />
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T, lineHeight: 1.2 }}>
+                {displayName}
+              </div>
+              <div style={{ fontSize: 11, color: S }}>● Online</div>
+            </div>
+            <i className={`fa fa-chevron-${dropOpen ? "up" : "down"}`}
+              style={{ fontSize: 11, color: T2, marginLeft: 2 }} />
+          </button>
+
+          {dropOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 8px)", right: 0,
+              background: "#fff", borderRadius: 12, border: `1px solid ${B}`,
+              boxShadow: "0 10px 30px rgba(0,0,0,.12)", minWidth: 180,
+              zIndex: 9999, overflow: "hidden",
+            }}>
+              <div style={{
+                padding: "12px 16px", borderBottom: `1px solid ${B}`,
+                background: `linear-gradient(135deg,${P}08,${A}08)`,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T }}>{displayName}</div>
+                <div style={{ fontSize: 12, color: T2, marginTop: 2 }}>Quản trị viên</div>
+              </div>
+              <button
+                onClick={logout}
+                style={{
+                  width: "100%", padding: "11px 16px", border: "none", background: "none",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 9,
+                  fontSize: 13.5, fontWeight: 600, color: "#ef4444",
+                  transition: "background .15s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#fef2f2"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+              >
+                <i className="fa fa-sign-out" style={{ fontSize: 14 }} />
+                Đăng xuất
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div style={{ marginLeft: 240, paddingTop: 60, minHeight: "100vh", background: "#f1f5f9" }}>
+        <div style={{ padding: 24 }}>{children}</div>
+      </div>
+    </>
+  );
 }
 
 export default Header;

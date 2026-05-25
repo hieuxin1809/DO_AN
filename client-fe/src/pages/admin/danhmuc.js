@@ -3,11 +3,12 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Swal from 'sweetalert2';
 import ReactPaginate from 'react-paginate';
-import { getMethod, deleteMethod } from '../../services/request';
+import Select from 'react-select';
+import { getMethod, deleteMethod, postMethodPayload } from '../../services/request';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faPlus, faEdit, faTrash, faLayerGroup,
-  faSearch, faCheckCircle, faX, faTag,
+  faSearch, faCheckCircle, faX, faTag, faSave,
 } from '@fortawesome/free-solid-svg-icons';
 
 /* ── tokens ── */
@@ -22,7 +23,6 @@ const TEXT_2  = '#64748b';
 
 const PAGE_SIZE = 10;
 
-/* ── Pagination styles (injected once) ── */
 const paginationCSS = `
 .admin-dm-pagination { display:flex; gap:6px; list-style:none; padding:0; margin:0; flex-wrap:wrap; justify-content:flex-end; }
 .admin-dm-pagination li a {
@@ -35,6 +35,7 @@ const paginationCSS = `
 .admin-dm-pagination li a:hover { border-color:#2A388F; color:#2A388F; background:#eff6ff; }
 .admin-dm-pagination li.active a { background:linear-gradient(135deg,#2A388F,#0ea5e9); border-color:#2A388F; color:#fff; }
 .admin-dm-pagination li.disabled a { opacity:0.4; cursor:not-allowed; }
+@keyframes spin { to { transform: rotate(360deg); } }
 `;
 
 const AdminDanhMuc = () => {
@@ -44,6 +45,14 @@ const AdminDanhMuc = () => {
   const [loading,   setLoading]   = useState(true);
   const [search,    setSearch]    = useState('');
   const [total,     setTotal]     = useState(0);
+  const [parents,   setParents]   = useState([]);  // danh mục chính (cho dropdown cha)
+
+  /* ── modal state ── */
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editId,    setEditId]    = useState(null);
+  const [form,      setForm]      = useState({ typeName: '', isPrimary: false, parent: null });
+  const [saving,    setSaving]    = useState(false);
+  const [errors,    setErrors]    = useState({});
 
   /* ── fetch ── */
   const fetchPage = async (page = 0) => {
@@ -59,7 +68,14 @@ const AdminDanhMuc = () => {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchPage(0); }, []);
+  const fetchParents = async () => {
+    try {
+      const res = await getMethod('/api/vaccine-type/find-primary');
+      setParents(await res.json());
+    } catch { /* silent */ }
+  };
+
+  useEffect(() => { fetchPage(0); fetchParents(); }, []);
 
   const handlePageClick = ({ selected }) => {
     setCurPage(selected);
@@ -76,17 +92,65 @@ const AdminDanhMuc = () => {
       confirmButtonText: 'Xóa', cancelButtonText: 'Hủy',
     });
     if (!isConfirmed) return;
-
     const res = await deleteMethod(`/api/vaccine-type/delete?id=${id}`);
-    if (res.status < 300) {
-      toast.success('Xóa thành công!');
-      fetchPage(curPage);
-    } else if (res.status === 417) {
+    if (res.status < 300) { toast.success('Xóa thành công!'); fetchPage(curPage); }
+    else if (res.status === 417) {
       const d = await res.json();
       toast.warning(d.defaultMessage || 'Không thể xóa danh mục này');
-    } else {
-      toast.error('Xóa thất bại');
-    }
+    } else toast.error('Xóa thất bại');
+  };
+
+  /* ── add / edit modal ── */
+  const openAdd = () => {
+    setEditId(null);
+    setForm({ typeName: '', isPrimary: false, parent: null });
+    setErrors({});
+    setModalOpen(true);
+  };
+  const openEdit = (item) => {
+    setEditId(item.id);
+    setForm({
+      typeName: item.typeName || '',
+      isPrimary: !!item.isPrimary,
+      parent: item.vaccineType || null,
+    });
+    setErrors({});
+    setModalOpen(true);
+  };
+  const closeModal = () => { setModalOpen(false); setSaving(false); };
+
+  const validate = () => {
+    const e = {};
+    if (!form.typeName.trim()) e.typeName = 'Vui lòng nhập tên danh mục';
+    else if (form.typeName.trim().length < 2) e.typeName = 'Tên quá ngắn (≥2 ký tự)';
+    if (!form.isPrimary && !form.parent) e.parent = 'Danh mục con phải chọn danh mục cha';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const obj = {
+        id: editId,
+        typeName: form.typeName.trim(),
+        isPrimary: form.isPrimary,
+      };
+      if (form.parent && !form.isPrimary) obj.vaccineType = { id: form.parent.id };
+
+      const res = await postMethodPayload('/api/vaccine-type/add', obj);
+      if (res.status < 300) {
+        toast.success(editId ? 'Cập nhật thành công!' : 'Thêm danh mục thành công!');
+        closeModal();
+        fetchPage(curPage);
+        fetchParents();
+      } else if (res.status === 417) {
+        const d = await res.json();
+        toast.warning(d.defaultMessage || 'Lưu thất bại');
+      } else toast.error('Lưu thất bại');
+    } catch { toast.error('Đã xảy ra lỗi'); }
+    finally { setSaving(false); }
   };
 
   /* ── filtered (client-side search) ── */
@@ -117,7 +181,7 @@ const AdminDanhMuc = () => {
             <div style={{ fontSize: 13, color: TEXT_2 }}>Phân loại vaccine theo nhóm</div>
           </div>
         </div>
-        <a href="adddanhmuc" style={{
+        <button onClick={openAdd} style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
           padding: '10px 20px', borderRadius: 10, textDecoration: 'none',
           border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14,
@@ -125,7 +189,7 @@ const AdminDanhMuc = () => {
           boxShadow: `0 4px 14px rgba(42,56,143,0.3)`,
         }}>
           <FontAwesomeIcon icon={faPlus} /> Thêm danh mục
-        </a>
+        </button>
       </div>
 
       {/* ── stat chips ── */}
@@ -139,15 +203,12 @@ const AdminDanhMuc = () => {
       <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden',
         border: `1px solid ${BORDER}`, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
 
-        {/* search */}
         <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}`,
           display: 'flex', alignItems: 'center', gap: 10 }}>
           <FontAwesomeIcon icon={faSearch} style={{ color: TEXT_2, fontSize: 14, flexShrink: 0 }} />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
+          <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Tìm theo tên danh mục..."
-            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: TEXT, background: 'transparent' }}
-          />
+            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: TEXT, background: 'transparent' }} />
           {search && (
             <button onClick={() => setSearch('')}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: TEXT_2, padding: 4 }}>
@@ -156,7 +217,6 @@ const AdminDanhMuc = () => {
           )}
         </div>
 
-        {/* table */}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -189,11 +249,9 @@ const AdminDanhMuc = () => {
                   style={{ borderBottom: `1px solid ${BORDER}`, transition: 'background .15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  {/* idx */}
                   <td style={{ padding: '14px 18px', color: TEXT_2, fontWeight: 600, fontSize: 13 }}>
                     {curPage * PAGE_SIZE + idx + 1}
                   </td>
-                  {/* name */}
                   <td style={{ padding: '14px 18px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0,
@@ -205,7 +263,6 @@ const AdminDanhMuc = () => {
                       <span style={{ fontWeight: 700, color: TEXT }}>{item.typeName}</span>
                     </div>
                   </td>
-                  {/* primary badge */}
                   <td style={{ padding: '14px 18px' }}>
                     {item.isPrimary ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -221,7 +278,6 @@ const AdminDanhMuc = () => {
                       </span>
                     )}
                   </td>
-                  {/* parent */}
                   <td style={{ padding: '14px 18px' }}>
                     {item.vaccineType ? (
                       <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 12.5,
@@ -232,20 +288,19 @@ const AdminDanhMuc = () => {
                       <span style={{ color: TEXT_2, fontSize: 13 }}>—</span>
                     )}
                   </td>
-                  {/* actions */}
                   <td style={{ padding: '14px 18px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <a href={`adddanhmuc?id=${item.id}`} title="Sửa" style={{
+                      <button title="Sửa" onClick={() => openEdit(item)} style={{
                         width: 34, height: 34, borderRadius: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         border: `1.5px solid ${WARNING}22`, background: `${WARNING}11`,
-                        color: WARNING, textDecoration: 'none', fontSize: 14, transition: 'all .15s',
+                        color: WARNING, cursor: 'pointer', fontSize: 14, transition: 'all .15s',
                       }}
                         onMouseEnter={e => { e.currentTarget.style.background = WARNING; e.currentTarget.style.color = '#fff'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = `${WARNING}11`; e.currentTarget.style.color = WARNING; }}
                       >
                         <FontAwesomeIcon icon={faEdit} />
-                      </a>
+                      </button>
                       <button title="Xóa" onClick={() => handleDelete(item.id, item.typeName)} style={{
                         width: 34, height: 34, borderRadius: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -265,7 +320,6 @@ const AdminDanhMuc = () => {
           </table>
         </div>
 
-        {/* pagination */}
         {pageCount > 1 && (
           <div style={{ padding: '16px 20px', borderTop: `1px solid ${BORDER}`,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -280,10 +334,6 @@ const AdminDanhMuc = () => {
               onPageChange={handlePageClick}
               forcePage={curPage}
               containerClassName="admin-dm-pagination"
-              pageClassName="" pageLinkClassName=""
-              previousClassName="" previousLinkClassName=""
-              nextClassName="" nextLinkClassName=""
-              breakClassName="" breakLinkClassName=""
               activeClassName="active"
               disabledClassName="disabled"
               previousLabel="← Trước"
@@ -293,11 +343,106 @@ const AdminDanhMuc = () => {
         )}
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      {/* ══ Modal Thêm / Sửa danh mục ══ */}
+      {modalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)',
+            backdropFilter: 'blur(3px)' }} onClick={closeModal} />
+          <div style={{ position: 'relative', background: '#fff', borderRadius: 16,
+            width: '100%', maxWidth: 480, boxShadow: '0 24px 48px rgba(0,0,0,0.22)' }}>
+
+            {/* header gradient */}
+            <div style={{
+              background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
+              padding: '16px 22px', borderRadius: '16px 16px 0 0',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <span style={{ color: '#fff', fontWeight: 800, fontSize: 15,
+                display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FontAwesomeIcon icon={editId ? faEdit : faPlus} />
+                {editId ? 'Chỉnh sửa danh mục' : 'Thêm danh mục mới'}
+              </span>
+              <button onClick={closeModal} style={{
+                background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff',
+                borderRadius: 8, width: 28, height: 28, cursor: 'pointer', fontSize: 13,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <FontAwesomeIcon icon={faX} />
+              </button>
+            </div>
+
+            {/* body */}
+            <div style={{ padding: 24 }}>
+              {/* Tên */}
+              <FieldRow label="Tên danh mục" required>
+                <StyledInput value={form.typeName}
+                  onChange={e => setForm(f => ({ ...f, typeName: e.target.value }))}
+                  placeholder="VD: Vaccine 6in1, Vaccine cúm..." autoFocus />
+                {errors.typeName && <ErrMsg msg={errors.typeName} />}
+              </FieldRow>
+
+              {/* Phân loại */}
+              <FieldRow label="Phân loại">
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <RadioCard
+                    selected={form.isPrimary}
+                    color={SUCCESS}
+                    icon={faCheckCircle}
+                    title="Danh mục chính"
+                    onClick={() => setForm(f => ({ ...f, isPrimary: true, parent: null }))}
+                  />
+                  <RadioCard
+                    selected={!form.isPrimary}
+                    color={ACCENT}
+                    icon={faTag}
+                    title="Danh mục con"
+                    desc="Thuộc 1 danh mục cha"
+                    onClick={() => setForm(f => ({ ...f, isPrimary: false }))}
+                  />
+                </div>
+              </FieldRow>
+
+              {/* Danh mục cha — chỉ hiện khi là con */}
+              {!form.isPrimary && (
+                <FieldRow label="Danh mục cha" required>
+                  <Select
+                    options={parents}
+                    value={form.parent}
+                    onChange={p => setForm(f => ({ ...f, parent: p }))}
+                    getOptionLabel={(o) => o.typeName}
+                    getOptionValue={(o) => o.id}
+                    placeholder="Chọn danh mục cha"
+                    isClearable
+                    styles={{
+                      control: (base, s) => ({
+                        ...base, minHeight: 42, borderRadius: 10,
+                        borderColor: errors.parent ? DANGER : (s.isFocused ? ACCENT : BORDER),
+                        boxShadow: s.isFocused ? `0 0 0 3px ${ACCENT}33` : 'none',
+                        '&:hover': { borderColor: ACCENT },
+                      }),
+                    }}
+                  />
+                  {errors.parent && <ErrMsg msg={errors.parent} />}
+                </FieldRow>
+              )}
+
+              {/* footer */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <button onClick={closeModal} style={btnSecondary}>Hủy</button>
+                <button onClick={handleSave} disabled={saving} style={btnPrimary(saving)}>
+                  <FontAwesomeIcon icon={faSave} /> {saving ? 'Đang lưu...' : (editId ? 'Cập nhật' : 'Thêm mới')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
+/* ─── helpers ─── */
 function StatChip({ label, value, color, icon }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10,
@@ -310,5 +455,69 @@ function StatChip({ label, value, color, icon }) {
     </div>
   );
 }
+
+function FieldRow({ label, required, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: TEXT_2,
+        textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 7 }}>
+        {label}{required && <span style={{ color: DANGER, marginLeft: 3 }}>*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function StyledInput({ ...props }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input {...props} style={{
+      width: '100%', boxSizing: 'border-box', padding: '11px 14px',
+      borderRadius: 10, border: `1.5px solid ${focused ? ACCENT : BORDER}`,
+      background: '#fff', fontSize: 14, color: TEXT, outline: 'none',
+      transition: 'border-color .15s, box-shadow .15s',
+      boxShadow: focused ? `0 0 0 3px ${ACCENT}33` : 'none',
+      ...props.style,
+    }}
+      onFocus={e => { setFocused(true); props.onFocus?.(e); }}
+      onBlur={e  => { setFocused(false); props.onBlur?.(e); }}
+    />
+  );
+}
+
+function RadioCard({ selected, color, icon, title, desc, onClick }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+      background: selected ? `${color}10` : '#fff',
+      border: `2px solid ${selected ? color : BORDER}`,
+      textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
+      transition: 'all .15s', boxShadow: selected ? `0 2px 8px ${color}22` : 'none',
+    }}>
+      <FontAwesomeIcon icon={icon} style={{ color, fontSize: 18, flexShrink: 0 }} />
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: selected ? color : TEXT }}>{title}</div>
+        <div style={{ fontSize: 11.5, color: TEXT_2, marginTop: 1 }}>{desc}</div>
+      </div>
+    </button>
+  );
+}
+
+function ErrMsg({ msg }) {
+  return <div style={{ color: DANGER, fontSize: 12, marginTop: 4 }}>⚠ {msg}</div>;
+}
+
+const btnSecondary = {
+  padding: '10px 20px', borderRadius: 10, border: `1.5px solid ${BORDER}`,
+  background: '#fff', color: TEXT_2, fontWeight: 600, fontSize: 13.5, cursor: 'pointer',
+};
+const btnPrimary = (disabled) => ({
+  padding: '10px 22px', borderRadius: 10, border: 'none',
+  background: disabled ? '#94a3b8' : `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
+  color: '#fff', fontWeight: 700, fontSize: 13.5,
+  cursor: disabled ? 'not-allowed' : 'pointer',
+  display: 'flex', alignItems: 'center', gap: 8,
+  boxShadow: disabled ? 'none' : `0 4px 14px rgba(42,56,143,0.3)`,
+});
 
 export default AdminDanhMuc;

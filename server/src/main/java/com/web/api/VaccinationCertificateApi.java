@@ -4,14 +4,20 @@ import com.web.entity.User;
 import com.web.entity.VaccinationCertificate;
 import com.web.exception.MessageException;
 import com.web.repository.CustomerScheduleRepository;
+import com.web.repository.VaccinationCertificateRepository;
 import com.web.service.VaccinationCertificateService;
 import com.web.utils.UserUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -25,6 +31,9 @@ public class VaccinationCertificateApi {
 
     @Autowired
     private CustomerScheduleRepository customerScheduleRepository;
+
+    @Autowired
+    private VaccinationCertificateRepository certRepository;
 
     @Autowired
     private UserUtils userUtils;
@@ -72,9 +81,16 @@ public class VaccinationCertificateApi {
         result.put("valid", valid);
         result.put("serialNo", cert.getSerialNo());
         if (!valid) {
-            result.put("reason", Boolean.TRUE.equals(cert.getRevoked())
-                    ? "Giấy đã bị thu hồi"
-                    : "Dữ liệu giấy không khớp chữ ký số (có thể đã bị sửa)");
+            if (Boolean.TRUE.equals(cert.getRevoked())) {
+                String r = "Giấy đã bị thu hồi";
+                if (cert.getRevokedReason() != null && !cert.getRevokedReason().isEmpty()) {
+                    r += " — " + cert.getRevokedReason();
+                }
+                result.put("reason", r);
+                result.put("revokedDate", cert.getRevokedDate());
+            } else {
+                result.put("reason", "Dữ liệu giấy không khớp chữ ký số (có thể đã bị sửa)");
+            }
         }
 
         // Thông tin tóm tắt (không trả full để tránh leak)
@@ -100,5 +116,76 @@ public class VaccinationCertificateApi {
         return idCard.substring(0, keep)
                 + "*".repeat(idCard.length() - keep * 2)
                 + idCard.substring(idCard.length() - keep);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ADMIN — Quản lý giấy chứng nhận
+       ══════════════════════════════════════════════════════════════ */
+
+    /** GET /api/certificate/admin/list — list với filter + pagination */
+    @GetMapping("/admin/list")
+    public ResponseEntity<?> adminList(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String vaccineName,
+            @RequestParam(required = false) String centerName,
+            @RequestParam(required = false) Boolean revoked,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Timestamp from = parseDateStart(fromDate);
+        Timestamp to   = parseDateEnd(toDate);
+        String kw  = nullIfBlank(keyword);
+        String vn  = nullIfBlank(vaccineName);
+        String cn  = nullIfBlank(centerName);
+        Page<VaccinationCertificate> p = certRepository.searchAdmin(
+                kw, vn, cn, revoked, from, to, PageRequest.of(page, size));
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("content", p.getContent());
+        body.put("totalElements", p.getTotalElements());
+        body.put("totalPages", p.getTotalPages());
+        body.put("page", p.getNumber());
+        body.put("size", p.getSize());
+
+        // Stats nhỏ kèm
+        body.put("totalActive", certRepository.countActive());
+        body.put("totalRevoked", certRepository.countRevoked());
+
+        return new ResponseEntity<>(body, HttpStatus.OK);
+    }
+
+    /** GET /api/certificate/admin/detail/{id} — chi tiết cert (full data) */
+    @GetMapping("/admin/detail/{id}")
+    public ResponseEntity<?> adminDetail(@PathVariable Long id) {
+        VaccinationCertificate cert = certService.findById(id)
+                .orElseThrow(() -> new MessageException("Không tìm thấy giấy xác nhận!"));
+        return new ResponseEntity<>(cert, HttpStatus.OK);
+    }
+
+    /** POST /api/certificate/admin/revoke/{id} — thu hồi với lý do */
+    @PostMapping("/admin/revoke/{id}")
+    public ResponseEntity<?> adminRevoke(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        User loggedIn = userUtils.getUserWithAuthority();
+        if (loggedIn == null) throw new MessageException("Vui lòng đăng nhập!");
+        String reason = body == null ? null : body.get("reason");
+        VaccinationCertificate cert = certService.revokeCert(id, reason, loggedIn.getEmail());
+        return new ResponseEntity<>(cert, HttpStatus.OK);
+    }
+
+    /* ─── helpers ─── */
+    private static String nullIfBlank(String s) {
+        return (s == null || s.trim().isEmpty()) ? null : s.trim();
+    }
+    private static Timestamp parseDateStart(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return Timestamp.valueOf(LocalDate.parse(s).atStartOfDay()); }
+        catch (Exception e) { return null; }
+    }
+    private static Timestamp parseDateEnd(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return Timestamp.valueOf(LocalDate.parse(s).atTime(23, 59, 59)); }
+        catch (Exception e) { return null; }
     }
 }

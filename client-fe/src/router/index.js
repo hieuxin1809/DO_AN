@@ -8,9 +8,10 @@ import userAdmin from "../pages/admin/user";
 import lichTiemChungAdmin from "../pages/admin/lichtiemchung";
 import addLichTiemChungAdmin from "../pages/admin/addlichtiemchung";
 import AdminDanhMuc from "../pages/admin/danhmuc";
-import AdminAddDanhMuc from "../pages/admin/adddanhmuc";
 import CenterAdmin from "../pages/admin/center";
 import AddCenterAdmin from "../pages/admin/addcenter";
+import AdminCertificates from "../pages/admin/certificates";
+import AdminReminders from "../pages/admin/reminders";
 
 //public
 import login from "../pages/public/login";
@@ -77,7 +78,6 @@ const adminRoutes = [
     {path: "/admin/index", component: homeAdmin, layout: layoutAdmin},
     {path: "/admin/user", component: userAdmin, layout: layoutAdmin},
     { path: "/admin/danhmuc", component: AdminDanhMuc, layout: layoutAdmin },
-    { path: "/admin/adddanhmuc", component: AdminAddDanhMuc, layout: layoutAdmin },
     { path: "/admin/center", component: CenterAdmin, layout: layoutAdmin },
     { path: "/admin/add-center", component: AddCenterAdmin, layout: layoutAdmin },
     {
@@ -105,6 +105,8 @@ const adminRoutes = [
         component: AdminPhanHoi,
         layout: layoutAdmin,
     },
+    { path: "/admin/certificates", component: AdminCertificates, layout: layoutAdmin },
+    { path: "/admin/reminders",    component: AdminReminders,    layout: layoutAdmin },
 ];
 
 const staffRoutes = [

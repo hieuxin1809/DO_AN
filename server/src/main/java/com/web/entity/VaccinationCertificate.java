@@ -79,6 +79,18 @@ public class VaccinationCertificate {
     @Column(nullable = false)
     private Boolean revoked;
 
+    /** Lý do thu hồi — bắt buộc nhập khi admin thu hồi */
+    @Column(name = "revoked_reason", length = 500)
+    private String revokedReason;
+
+    /** Email admin đã thu hồi */
+    @Column(name = "revoked_by", length = 200)
+    private String revokedBy;
+
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "GMT+7")
+    @Column(name = "revoked_date")
+    private Timestamp revokedDate;
+
     /**
      * Cờ khóa snapshot. Khi true → cert không còn auto-heal theo profile nữa.
      * Tự động set true khi cert được verify lần đầu qua QR public,

@@ -446,4 +446,94 @@ public class EmailTemplateUtils {
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
+
+    // ─────────────────────────────────────────────
+    //  UPCOMING INJECTION REMINDER (1 ngày trước lịch tiêm)
+    // ─────────────────────────────────────────────
+
+    public static String upcomingInjectionReminder(String customerName, String vaccineName,
+                                                   String injectDate, String timeSlot, String centerName,
+                                                   String centerAddress) {
+        String header = buildHeader("&#9200; Nh&#7855;c l&#7883;ch ti&#234;m ng&#224;y mai");
+
+        StringBuilder body = new StringBuilder();
+        body.append(buildGreeting(customerName != null ? customerName : "Qu&#253; kh&#225;ch"));
+        body.append("<p style=\"margin:12px 0 20px;font-size:14px;color:#475569;line-height:1.7;\">")
+            .append("Xin nh&#7855;c b&#7841;n c&#243; l&#7883;ch ti&#234;m v&#7855;c-xin v&#224;o ng&#224;y mai. ")
+            .append("Vui l&#242;ng s&#7855;p x&#7871;p th&#7901;i gian &#273;&#7871;n &#273;&#250;ng gi&#7901; nh&#233;!")
+            .append("</p>");
+
+        body.append("<div style=\"background:linear-gradient(135deg,#fef3c7,#fed7aa);border-radius:12px;padding:20px;margin:20px 0;text-align:center;\">");
+        body.append("<div style=\"font-size:14px;color:#92400e;font-weight:600;margin-bottom:6px;\">&#128197; LỊCH TIÊM SẮP TỚI</div>");
+        body.append("<div style=\"font-size:24px;font-weight:900;color:#9a3412;margin:6px 0;\">").append(injectDate != null ? injectDate : "—").append("</div>");
+        body.append("<div style=\"font-size:14px;color:#78350f;\">&#9200; ").append(timeSlot != null ? timeSlot : "—").append("</div>");
+        body.append("</div>");
+
+        body.append(buildInfoTable(new String[][]{
+            {"&#128137; V&#7855;c-xin:",    vaccineName != null ? vaccineName : "—"},
+            {"&#127968; Trung t&#226;m:",   centerName  != null ? centerName  : "—"},
+            {"&#128205; &#272;&#7883;a ch&#7881;:",    centerAddress != null ? centerAddress : "—"}
+        }));
+
+        body.append("<div style=\"background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;\">");
+        body.append("<p style=\"margin:0 0 8px;font-size:13px;font-weight:700;color:#92400e;\">&#9888; CHU&#7848;N B&#7882; TR&#431;&#7898;C KHI TI&#202;M:</p>");
+        body.append("<ul style=\"margin:0;padding-left:20px;font-size:13px;color:#92400e;line-height:1.7;\">");
+        body.append("<li>Mang theo CMND/C&#259;n c&#432;&#7899;c c&#244;ng d&#226;n</li>");
+        body.append("<li>&#258;n u&#7889;ng b&#236;nh th&#432;&#7901;ng, kh&#244;ng nh&#7883;n &#259;n</li>");
+        body.append("<li>Ng&#7911; &#273;&#7911; gi&#7845;c, kh&#244;ng u&#7889;ng r&#432;&#7907;u bia 24h tr&#432;&#7899;c ti&#234;m</li>");
+        body.append("<li>B&#225;o nh&#226;n vi&#234;n n&#7871;u &#273;ang s&#7889;t, &#7889;m, d&#7883; &#7913;ng ho&#7863;c &#273;ang u&#7889;ng thu&#7889;c</li>");
+        body.append("</ul>");
+        body.append("</div>");
+
+        body.append(buildCtaButton("https://vaxms.shop/lich-da-dang-ky", "&#128197; Xem chi ti&#7871;t l&#7883;ch", "#0284c7"));
+
+        body.append(buildDivider());
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u kh&#244;ng th&#7875; &#273;&#7871;n &#273;&#250;ng h&#7865;n, vui l&#242;ng v&#224;o trang &lt;strong&gt;L&#7883;ch c&#7911;a t&#244;i&lt;/strong&gt; &#273;&#7875; &#273;&#7893;i ho&#7863;c h&#7911;y l&#7883;ch.</p>");
+
+        return assemble(header, wrapBody(body.toString()), buildFooter());
+    }
+
+    // ─────────────────────────────────────────────
+    //  NEXT DOSE REMINDER (mũi tiếp theo cho vaccine nhiều mũi)
+    // ─────────────────────────────────────────────
+
+    public static String nextDoseReminder(String customerName, String vaccineName,
+                                          int currentDose, int totalDoses,
+                                          String lastInjectDate, String suggestedDate) {
+        String header = buildHeader("&#128137; Nh&#7855;c m&#361;i ti&#234;m ti&#7871;p theo");
+
+        StringBuilder body = new StringBuilder();
+        body.append(buildGreeting(customerName != null ? customerName : "Qu&#253; kh&#225;ch"));
+        body.append("<p style=\"margin:12px 0 20px;font-size:14px;color:#475569;line-height:1.7;\">")
+            .append("B&#7841;n &#273;&#227; ti&#234;m m&#361;i <strong>").append(currentDose).append("/").append(totalDoses).append("</strong> v&#7855;c-xin <strong style=\"color:#0284c7;\">")
+            .append(vaccineName != null ? vaccineName : "")
+            .append("</strong>. &#272;&#227; &#273;&#7871;n l&#250;c &#273;&#259;ng k&#253; m&#361;i ti&#7871;p theo!")
+            .append("</p>");
+
+        body.append("<div style=\"background:linear-gradient(135deg,#dbeafe,#bfdbfe);border-radius:12px;padding:20px;margin:20px 0;text-align:center;\">");
+        body.append("<div style=\"font-size:13px;color:#1e3a8a;font-weight:600;\">M&#361;i ti&#234;m ti&#7871;p theo</div>");
+        body.append("<div style=\"font-size:36px;font-weight:900;color:#1e40af;margin:8px 0;\">M&#361;i ").append(currentDose + 1).append("/").append(totalDoses).append("</div>");
+        body.append("<div style=\"font-size:13px;color:#1e3a8a;\">D&#7921; ki&#7871;n: <strong>").append(suggestedDate != null ? suggestedDate : "—").append("</strong></div>");
+        body.append("</div>");
+
+        body.append(buildInfoTable(new String[][]{
+            {"&#128137; V&#7855;c-xin:",    vaccineName != null ? vaccineName : "—"},
+            {"&#128200; M&#361;i &#273;&#227; ti&#234;m:", currentDose + "/" + totalDoses},
+            {"&#128197; M&#361;i g&#7847;n nh&#7845;t:", lastInjectDate != null ? lastInjectDate : "—"},
+            {"&#9200; D&#7921; ki&#7871;n m&#361;i k&#7871; ti&#7871;p:", suggestedDate != null ? suggestedDate : "—"}
+        }));
+
+        body.append(buildCtaButton("https://vaxms.shop/dang-ky-tiem-chung", "&#128197; &#272;&#259;ng k&#253; m&#361;i ti&#7871;p theo", "#0284c7"));
+
+        body.append("<div style=\"background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 18px;margin:20px 0;\">");
+        body.append("<p style=\"margin:0;font-size:13px;color:#0c4a6e;line-height:1.7;\">");
+        body.append("&#128161; <strong>L&#432;u &#253;:</strong> Vi&#7879;c ti&#234;m &#273;&#7911; m&#361;i &#273;&#250;ng l&#7883;ch r&#7845;t quan tr&#7885;ng &#273;&#7875; &#273;&#7843;m b&#7843;o hi&#7879;u qu&#7843; mi&#7877;n d&#7883;ch t&#7889;t nh&#7845;t. Vui l&#242;ng &#273;&#259;ng k&#253; s&#7899;m.");
+        body.append("</p>");
+        body.append("</div>");
+
+        body.append(buildDivider());
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">C&#7847;n t&#432; v&#7845;n? Li&#234;n h&#7879; hotline <strong>0342.046.981</strong> ho&#7863;c truy c&#7853;p website.</p>");
+
+        return assemble(header, wrapBody(body.toString()), buildFooter());
+    }
 }
