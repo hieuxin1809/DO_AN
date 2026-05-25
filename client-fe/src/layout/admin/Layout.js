@@ -9,16 +9,20 @@ const T  = "#1e293b";
 const T2 = "#64748b";
 
 const NAV = [
-  { href: "index",           icon: "fa-home",             label: "Trang chủ" },
-  { href: "user",            icon: "fa-user",             label: "Quản lý tài khoản" },
-  { href: "danhmuc",         icon: "fa-list",             label: "Quản lý danh mục" },
-  { href: "center",          icon: "fa-hospital-o",       label: "Quản lý trung tâm" },
-  { href: "lich-tiem-chung", icon: "fa-calendar-check-o", label: "Lịch tiêm chủng" },
-  { href: "khach-hang",      icon: "fa-users",            label: "Quản lý khách hàng" },
-  { href: "nhan-vien",       icon: "fa-user-md",          label: "Quản lý bác sỹ, y tá" },
-  { href: "phan-hoi",        icon: "fa-comments",         label: "Phản hồi khách hàng" },
-  { href: "certificates",    icon: "fa-certificate",      label: "Giấy chứng nhận" },
-  { href: "reminders",       icon: "fa-bell",             label: "Hệ thống nhắc lịch" },
+  { href: "index",            icon: "fa-home",             label: "Trang chủ" },
+  { href: "user",             icon: "fa-user",             label: "Quản lý tài khoản" },
+  { href: "nhan-vien",        icon: "fa-user-md",          label: "Quản lý bác sĩ" },
+  { href: "khach-hang",       icon: "fa-users",            label: "Quản lý khách hàng" },
+  { href: "danhmuc",          icon: "fa-list",             label: "Quản lý danh mục" },
+  { href: "vaccines",         icon: "fa-medkit",           label: "Quản lý vaccine" },
+  { href: "inventory",        icon: "fa-cubes",            label: "Kho vaccine" },
+  { href: "center",           icon: "fa-hospital-o",       label: "Quản lý trung tâm" },
+  { href: "campaigns",        icon: "fa-calendar",         label: "Quản lý đợt tiêm" },
+  { href: "registrations",    icon: "fa-clipboard-list",   label: "Duyệt đăng ký tiêm" },
+  { href: "lich-tiem-chung",  icon: "fa-calendar-check-o", label: "Lịch tiêm chủng" },
+  { href: "phan-hoi",         icon: "fa-comments",         label: "Phản hồi khách hàng" },
+  { href: "certificates",     icon: "fa-certificate",      label: "Giấy chứng nhận" },
+  { href: "reminders",        icon: "fa-bell",             label: "Hệ thống nhắc lịch" },
 ];
 
 function logout() {

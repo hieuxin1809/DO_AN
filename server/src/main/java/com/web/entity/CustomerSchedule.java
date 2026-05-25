@@ -45,7 +45,10 @@ public class CustomerSchedule {
     private String address;
     private String note;
 
+    @Column(columnDefinition = "TEXT")
     private String healthStatusBefore;
+
+    @Column(columnDefinition = "TEXT")
     private String healthStatusAfter;
 
     private Integer counterChange;

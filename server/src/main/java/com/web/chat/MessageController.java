@@ -33,13 +33,13 @@ public class MessageController {
      * Lấy danh sách user có thể nhận chat từ khách hàng.
      * Bao gồm: Support Staff, Doctor, Nurse, Admin (mọi role trừ Customer).
      */
+    /**
+     * Chat từ khách hàng → broadcast tới ai?
+     * Sau khi bỏ Support Staff + Nurse: chỉ Doctor xử lý chat khách.
+     * Admin không nhận chat trực tiếp (chỉ vận hành hệ thống).
+     */
     private List<User> getAllSupportStaff() {
-        List<User> list = new ArrayList<>();
-        list.addAll(userRepository.getUserByRole(Contains.ROLE_STAFF));
-        list.addAll(userRepository.getUserByRole(Contains.ROLE_DOCTOR));
-        list.addAll(userRepository.getUserByRole(Contains.ROLE_NURSE));
-        list.addAll(userRepository.getUserByRole(Contains.ROLE_ADMIN));
-        return list;
+        return new ArrayList<>(userRepository.getUserByRole(Contains.ROLE_DOCTOR));
     }
 
     @MessageMapping("/hello/{id}")

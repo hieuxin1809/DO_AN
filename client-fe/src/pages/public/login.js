@@ -45,11 +45,16 @@ async function processLogin(user, token) {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
     const role = user?.authorities?.name;
-    if (role === 'Admin')         window.location.href = '/admin/index';
+    if (role === 'Admin')        window.location.href = '/admin/index';
+    else if (role === 'Doctor')  window.location.href = '/doctor/dashboard';
     else if (role === 'Customer') window.location.href = '/index';
-    else if (role === 'Doctor')   window.location.href = '/staff/customer-schedule-1';
-    else if (role === 'Nurse')    window.location.href = '/staff/vaccine';
-    else if (role === 'Support Staff') window.location.href = '/staff/chat';
+    else {
+        // Nurse / Support Staff cũ → ép logout
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        toast.warning('Tài khoản role này không còn hoạt động');
+        setTimeout(() => { window.location.href = '/login'; }, 1500);
+    }
 }
 
 /* ═══════════════════════════════════════════════ */

@@ -10,7 +10,10 @@
  * }
  */
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+// html2canvas-pro: fork hỗ trợ oklch(), lab(), lch(), color() — fix bug
+// "Attempting to parse an unsupported color function 'oklch'" khi Chrome 111+
+// trả về oklch từ getComputedStyle cho các CSS không set tường minh.
+import html2canvas from 'html2canvas-pro';
 import QRCode from 'qrcode';
 
 /* ─── Lấy base URL cho QR — ưu tiên localStorage override ─── */
@@ -200,31 +203,94 @@ function field(label, value) {
 
 /* ─── Main: render + download ─── */
 export async function downloadCertificatePdf(cert, verifyBaseUrl = getVerifyBaseUrl()) {
-  if (!cert || !cert.serialNo) throw new Error('Dữ liệu giấy xác nhận không hợp lệ');
+  if (!cert || !cert.serialNo) throw new Error('Dữ liệu giấy xác nhận không hợp lệ (thiếu serialNo)');
 
   const verifyUrl = `${verifyBaseUrl}/${cert.serialNo}`;
 
   // 1. Sinh QR code
-  const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
-    width: 320,
-    margin: 1,
-    color: { dark: '#0f172a', light: '#ffffff' },
+  let qrDataUrl;
+  try {
+    qrDataUrl = await QRCode.toDataURL(verifyUrl, {
+      width: 320,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' },
+    });
+  } catch (e) {
+    console.error('[cert] QR generation failed:', e);
+    throw new Error('Không tạo được mã QR: ' + (e?.message || e));
+  }
+
+  // 2. Tạo IFRAME cô lập để render — tránh kế thừa CSS toàn page
+  //    (Tailwind v3.4+ dùng oklch() mà html2canvas v1 không parse được)
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = [
+    'position: absolute',
+    'left: 0',
+    'top: 0',
+    'opacity: 0',
+    'pointer-events: none',
+    'z-index: -1',
+    'width: 820px',
+    'height: 1200px',
+    'border: 0',
+  ].join(';');
+  document.body.appendChild(iframe);
+
+  // Chờ iframe sẵn sàng và ghi content vào
+  await new Promise(resolve => {
+    iframe.onload = resolve;
+    // CSS reset cực mạnh — ép color hex để tránh oklch() từ UA stylesheet
+    // (Chrome 111+ trả về oklch khi getComputedStyle nếu color không được set tường minh)
+    iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      *, *::before, *::after {
+        color: #0f172a;
+        background-color: transparent;
+        border-color: #e2e8f0;
+        text-decoration-color: #0f172a;
+        column-rule-color: #e2e8f0;
+        outline-color: #0f172a;
+        -webkit-text-fill-color: #0f172a;
+        -webkit-text-stroke-color: #0f172a;
+        caret-color: #0f172a;
+        accent-color: #0f172a;
+        color-scheme: light only;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        color: #0f172a;
+        color-scheme: light only;
+      }
+      body { font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+    </style></head><body>${buildCertificateHtml(cert, qrDataUrl, verifyUrl)}</body></html>`;
   });
 
-  // 2. Tạo container ẩn để render
-  const container = document.createElement('div');
-  container.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;';
-  container.innerHTML = buildCertificateHtml(cert, qrDataUrl, verifyUrl);
-  document.body.appendChild(container);
-
   try {
-    // 3. html2canvas snapshot (scale=2 cho retina-quality)
-    const canvas = await html2canvas(container.firstElementChild, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      logging: false,
-    });
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+    const target = iframeDoc.body.firstElementChild;
+    if (!target) throw new Error('Không tạo được DOM cho giấy xác nhận');
+
+    // Chờ thêm 1 frame để layout/font ổn định
+    await new Promise(r => setTimeout(r, 100));
+
+    // 3. html2canvas snapshot — chụp body của iframe (CSS hoàn toàn cô lập)
+    let canvas;
+    try {
+      canvas = await html2canvas(target, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+        width:  target.offsetWidth  || 794,
+        height: target.offsetHeight || undefined,
+        windowWidth:  target.offsetWidth  || 794,
+        windowHeight: target.offsetHeight || undefined,
+      });
+    } catch (e) {
+      console.error('[cert] html2canvas failed:', e);
+      throw new Error('Không chụp được nội dung giấy xác nhận: ' + (e?.message || e));
+    }
 
     // 4. Đưa vào PDF A4
     const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
@@ -233,18 +299,24 @@ export async function downloadCertificatePdf(cert, verifyBaseUrl = getVerifyBase
     const imgWidth   = pageWidth;
     const imgHeight  = (canvas.height * imgWidth) / canvas.width;
 
-    // Nếu ảnh cao hơn 1 trang → scale fit chiều cao
+    let imgData;
+    try {
+      imgData = canvas.toDataURL('image/png');
+    } catch (e) {
+      console.error('[cert] canvas.toDataURL failed (có thể do tainted canvas):', e);
+      throw new Error('Không xuất được ảnh canvas: ' + (e?.message || e));
+    }
+
     if (imgHeight > pageHeight) {
       const scaledWidth = (canvas.width * pageHeight) / canvas.height;
       const offsetX = (pageWidth - scaledWidth) / 2;
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', offsetX, 0, scaledWidth, pageHeight);
+      pdf.addImage(imgData, 'PNG', offsetX, 0, scaledWidth, pageHeight);
     } else {
-      const offsetY = 0;
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, offsetY, imgWidth, imgHeight);
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
     }
 
     pdf.save(`GiayXacNhan_${cert.serialNo}.pdf`);
   } finally {
-    document.body.removeChild(container);
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
   }
 }

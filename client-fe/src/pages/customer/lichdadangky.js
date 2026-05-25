@@ -56,6 +56,9 @@ const TEXT_2  = '#64748b';
 const BORDER  = '#e2e8f0';
 const BG_ROW  = '#f8fafc';
 const PRIMARY = '#2A388F';
+const SUCCESS = '#10b981';
+const DANGER  = '#ef4444';
+const WARNING = '#f59e0b';
 
 /* ── status badge config ─────────────────────── */
 const STATUS_MAP = {
@@ -88,38 +91,235 @@ function PayBadge({ paid }) {
         : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#92400e', background: '#fef3c7', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' }}>⏳ Chưa thanh toán</span>;
 }
 
-/* ── HealthStatusCell (unchanged logic) ────────── */
-const MAX_CHARS = 80;
+/* ── HealthStatusCell — parse JSON screening data sạch sẽ ────────── */
+const SCREENING_LABELS = {
+    hasFever:                 'Sốt',
+    hasAllergy:               'Dị ứng vaccine/thuốc',
+    isPregnant:               'Mang thai',
+    isOnImmunosuppressant:    'Đang dùng thuốc ức chế MD',
+    hasSevereChronicCondition:'Bệnh nền nghiêm trọng',
+    hadReactionLastDose:      'Phản ứng mũi trước',
+    hasInfectionLast14Days:   'Nhiễm trùng 14 ngày qua',
+};
+
+const SYMPTOM_LABELS = {
+    painAtSite:           'Đau, sưng tại chỗ tiêm',
+    redness:              'Đỏ tại chỗ tiêm',
+    mildFever:            'Sốt nhẹ (<38.5°C)',
+    highFever:            'Sốt cao (≥38.5°C)',
+    fatigue:              'Mệt mỏi, đau cơ',
+    rash:                 'Phát ban',
+    difficultyBreathing:  'Khó thở',
+    severeReaction:       'Phản ứng nặng',
+};
+
+function parseScreening(text) {
+    if (!text) return null;
+    const trimmed = String(text).trim();
+    if (!trimmed.startsWith('{')) return { isText: true, text: trimmed };
+    try {
+        const obj = JSON.parse(trimmed);
+        return { isText: false, data: obj };
+    } catch { return { isText: true, text: trimmed }; }
+}
+
 function HealthStatusCell({ item, onViewMore }) {
     const before = item.healthStatusBefore;
     const after  = item.healthStatusAfter;
     if (!before && !after) return <span style={{ color: '#bbb' }}>—</span>;
-    const text = before || after;
-    const isTruncated = text && text.length > MAX_CHARS;
+
+    const beforeParsed = parseScreening(before);
+    const afterParsed  = parseScreening(after);
+
+    /* Hiển thị tóm tắt cho screening JSON */
+    const renderSummary = (parsed) => {
+        if (!parsed) return null;
+        if (parsed.isText) {
+            const t = parsed.text;
+            return t.length > 60 ? t.slice(0, 60) + '…' : t;
+        }
+        const d = parsed.data || {};
+        // Phân biệt format: nếu có `symptoms` thì là follow-up sau tiêm
+        const isFollowup = d.symptoms && typeof d.symptoms === 'object';
+        if (isFollowup) {
+            const dangers = Object.keys(SYMPTOM_LABELS).filter(k => d.symptoms[k] === true);
+            if (dangers.length === 0) {
+                return (
+                    <span style={{ color: SUCCESS }}>
+                        ✓ Ổn định, không triệu chứng
+                        {d.observedTemperature && <span style={{ color: TEXT_2 }}> · {d.observedTemperature}°C</span>}
+                    </span>
+                );
+            }
+            return (
+                <span style={{ color: '#b45309' }}>
+                    ⚠ {dangers.length} triệu chứng
+                </span>
+            );
+        }
+        const dangers = Object.keys(SCREENING_LABELS).filter(k => d[k] === true);
+        if (dangers.length === 0) {
+            return (
+                <span style={{ color: SUCCESS }}>
+                    ✓ Đủ điều kiện tiêm
+                    {d.temperature && <span style={{ color: TEXT_2 }}> · {d.temperature}°C</span>}
+                </span>
+            );
+        }
+        return (
+            <span style={{ color: '#b45309' }}>
+                ⚠ {dangers.length} cảnh báo
+            </span>
+        );
+    };
+
     return (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>
             {before && (
                 <div>
-                    <span style={{ fontWeight: 500, color: '#555' }}>Trước: </span>
-                    {isTruncated && before === text ? <>{before.slice(0, MAX_CHARS)}... </> : before}
+                    <span style={{ fontWeight: 600, color: TEXT_2, fontSize: 11.5 }}>TRƯỚC: </span>
+                    {renderSummary(beforeParsed)}
                 </div>
             )}
             {after && (
                 <div style={{ marginTop: before ? 4 : 0 }}>
-                    <span style={{ fontWeight: 500, color: '#555' }}>Sau: </span>
-                    {!before && isTruncated
-                        ? <>{after.slice(0, MAX_CHARS)}... </>
-                        : (before ? (after.length > MAX_CHARS ? <>{after.slice(0, MAX_CHARS)}... </> : after) : after)}
+                    <span style={{ fontWeight: 600, color: TEXT_2, fontSize: 11.5 }}>SAU: </span>
+                    {renderSummary(afterParsed)}
                 </div>
             )}
-            {(isTruncated || (before && after)) && (
-                <button
-                    className="btn btn-link p-0"
-                    style={{ fontSize: 12 }}
-                    onClick={() => onViewMore(item)}
-                >
-                    Xem thêm
-                </button>
+            <button
+                onClick={() => onViewMore(item)}
+                style={{
+                    marginTop: 4, background: 'none', border: 'none',
+                    color: ACCENT, fontSize: 11.5, cursor: 'pointer',
+                    padding: 0, textDecoration: 'underline',
+                }}
+            >
+                Xem chi tiết
+            </button>
+        </div>
+    );
+}
+
+/* ── ScreeningDetail — render chi tiết JSON sàng lọc trong modal ── */
+function ScreeningDetail({ text }) {
+    if (!text) {
+        return (
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px',
+                color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>
+                Chưa có thông tin
+            </div>
+        );
+    }
+    const parsed = parseScreening(text);
+    if (parsed.isText) {
+        return (
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px',
+                color: '#334155', fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                {parsed.text}
+            </div>
+        );
+    }
+    const d = parsed.data || {};
+    const isFollowup = d.symptoms && typeof d.symptoms === 'object';
+
+    // ─── Follow-up sau tiêm ───
+    if (isFollowup) {
+        const symptoms = d.symptoms || {};
+        const temp = d.observedTemperature;
+        const minutes = d.observationMinutes;
+        const note = d.note;
+        const observedAt = d.observedAt;
+        const hasDanger = Object.keys(SYMPTOM_LABELS).some(k => symptoms[k] === true);
+        return (
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', fontSize: 13 }}>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 10, color: '#0f172a' }}>
+                    {temp != null && (
+                        <div>
+                            <strong>🌡️ Nhiệt độ:</strong> {temp}°C
+                            {Number(temp) >= 38.5 && <span style={{ color: DANGER, marginLeft: 6 }}>(sốt cao)</span>}
+                            {Number(temp) >= 37.5 && Number(temp) < 38.5 && <span style={{ color: WARNING, marginLeft: 6 }}>(hơi cao)</span>}
+                        </div>
+                    )}
+                    {minutes != null && (
+                        <div>
+                            <strong>⏱ Thời gian theo dõi:</strong> {minutes} phút
+                        </div>
+                    )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 6 }}>
+                    {Object.keys(SYMPTOM_LABELS).map(k => {
+                        const v = symptoms[k];
+                        if (v === undefined || v === null) return null;
+                        return (
+                            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6,
+                                color: v ? '#dc2626' : '#16a34a', fontSize: 12.5 }}>
+                                <span style={{ fontSize: 14 }}>{v ? '✗' : '✓'}</span>
+                                <span>{SYMPTOM_LABELS[k]}: <strong>{v ? 'Có' : 'Không'}</strong></span>
+                            </div>
+                        );
+                    })}
+                </div>
+                {!hasDanger && (
+                    <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6,
+                        background: 'rgba(16,185,129,.08)', color: '#065f46', fontSize: 12.5 }}>
+                        ✅ Bệnh nhân ổn định, không có triệu chứng bất thường.
+                    </div>
+                )}
+                {hasDanger && (
+                    <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6,
+                        background: 'rgba(239,68,68,.08)', color: '#991b1b', fontSize: 12.5 }}>
+                        ⚠️ Có dấu hiệu cần lưu ý — vui lòng theo dõi tiếp tại nhà.
+                    </div>
+                )}
+                {note && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #cbd5e1' }}>
+                        <strong style={{ color: '#475569' }}>📝 Ghi chú:</strong> {note}
+                    </div>
+                )}
+                {observedAt && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
+                        Ghi nhận lúc: {new Date(observedAt).toLocaleString('vi-VN')}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // ─── Sàng lọc trước tiêm ───
+    const note = d.note;
+    const temp = d.temperature;
+    const screenedAt = d.screenedAt;
+    return (
+        <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', fontSize: 13 }}>
+            {temp != null && (
+                <div style={{ marginBottom: 10, color: '#0f172a' }}>
+                    <strong>🌡️ Nhiệt độ:</strong> {temp}°C
+                    {Number(temp) > 37.5 && <span style={{ color: '#f59e0b', marginLeft: 8 }}>(cao)</span>}
+                </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 6 }}>
+                {Object.keys(SCREENING_LABELS).map(k => {
+                    const v = d[k];
+                    if (v === undefined || v === null) return null;
+                    return (
+                        <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6,
+                            color: v ? '#dc2626' : '#16a34a', fontSize: 12.5 }}>
+                            <span style={{ fontSize: 14 }}>{v ? '✗' : '✓'}</span>
+                            <span>{SCREENING_LABELS[k]}: <strong>{v ? 'Có' : 'Không'}</strong></span>
+                        </div>
+                    );
+                })}
+            </div>
+            {note && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #cbd5e1' }}>
+                    <strong style={{ color: '#475569' }}>📝 Ghi chú:</strong> {note}
+                </div>
+            )}
+            {screenedAt && (
+                <div style={{ marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
+                    Ghi nhận lúc: {new Date(screenedAt).toLocaleString('vi-VN')}
+                </div>
             )}
         </div>
     );
@@ -300,7 +500,8 @@ function LichDaDangKy() {
             toast.success('Đã tải giấy xác nhận!');
         } catch (err) {
             console.error('downloadCert error:', err);
-            toast.error('Tạo PDF thất bại!');
+            const msg = err?.message || String(err);
+            toast.error(`Tạo PDF thất bại: ${msg}`);
         } finally {
             setDownloadingCertId(null);
         }
@@ -800,16 +1001,12 @@ function LichDaDangKy() {
                             </div>
                             <div className="modal-body">
                                 <div style={{ marginBottom: 16 }}>
-                                    <p style={{ fontWeight: 600, marginBottom: 6, color: '#1890ff' }}>Tình trạng trước tiêm</p>
-                                    <div style={{ background: '#f6f6f6', borderRadius: 6, padding: '10px 14px', minHeight: 48, color: healthItem.healthStatusBefore ? '#333' : '#aaa', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                                        {healthItem.healthStatusBefore || 'Chưa có thông tin'}
-                                    </div>
+                                    <p style={{ fontWeight: 700, marginBottom: 8, color: '#1890ff' }}>📋 Tình trạng trước tiêm (sàng lọc)</p>
+                                    <ScreeningDetail text={healthItem.healthStatusBefore} />
                                 </div>
                                 <div>
-                                    <p style={{ fontWeight: 600, marginBottom: 6, color: '#52c41a' }}>Tình trạng sau tiêm</p>
-                                    <div style={{ background: '#f6f6f6', borderRadius: 6, padding: '10px 14px', minHeight: 48, color: healthItem.healthStatusAfter ? '#333' : '#aaa', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                                        {healthItem.healthStatusAfter || 'Chưa có thông tin'}
-                                    </div>
+                                    <p style={{ fontWeight: 700, marginBottom: 8, color: '#52c41a' }}>🩺 Theo dõi sau tiêm</p>
+                                    <ScreeningDetail text={healthItem.healthStatusAfter} />
                                 </div>
                             </div>
                             <div className="modal-footer">

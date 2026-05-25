@@ -174,6 +174,32 @@ public class VaccinationCertificateApi {
         return new ResponseEntity<>(cert, HttpStatus.OK);
     }
 
+    /**
+     * POST /api/certificate/admin/rehash-legacy
+     * Migration one-shot: tính lại hash cho các cert legacy bị sai
+     * (do bug ms-precision của Timestamp trước khi fix hash function).
+     * Không thay đổi nội dung cert — chỉ rewrite trường hash cho khớp.
+     */
+    @PostMapping("/admin/rehash-legacy")
+    public ResponseEntity<?> adminRehashLegacy() {
+        User loggedIn = userUtils.getUserWithAuthority();
+        if (loggedIn == null) throw new MessageException("Vui lòng đăng nhập!");
+        int count = certService.rehashLegacyCertificates();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("rehashed", count);
+        body.put("message", "Đã cập nhật hash cho " + count + " giấy chứng nhận legacy.");
+        return new ResponseEntity<>(body, HttpStatus.OK);
+    }
+
+    /** POST /api/certificate/admin/rehash/{id} — rehash 1 cert cụ thể */
+    @PostMapping("/admin/rehash/{id}")
+    public ResponseEntity<?> adminRehashOne(@PathVariable Long id) {
+        User loggedIn = userUtils.getUserWithAuthority();
+        if (loggedIn == null) throw new MessageException("Vui lòng đăng nhập!");
+        VaccinationCertificate cert = certService.rehashOne(id);
+        return new ResponseEntity<>(cert, HttpStatus.OK);
+    }
+
     /* ─── helpers ─── */
     private static String nullIfBlank(String s) {
         return (s == null || s.trim().isEmpty()) ? null : s.trim();

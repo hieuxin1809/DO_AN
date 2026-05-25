@@ -77,6 +77,9 @@ const CustomerSchedule = () => {
 
   /* schedule selection */
   const [vaccineSchedules,  setVaccineSchedules]  = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  /* Detect context: admin xem qua /admin/registrations hay staff xem qua /staff/customer-schedule */
+  const isAdmin = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin/');
   const [availableDates,    setAvailableDates]     = useState([]);
   const [availableTimes,    setAvailableTimes]     = useState([]);
   const [selectedSchedule,  setSelectedSchedule]  = useState(null);
@@ -93,6 +96,41 @@ const CustomerSchedule = () => {
   };
 
   useEffect(() => { if (modalOpen) loadVaccineSchedules(); }, [modalOpen]);
+
+  /* Load list doctor cho dropdown gán */
+  useEffect(() => {
+    fetch('http://localhost:8080/api/doctor/public/find-all', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then(setDoctors)
+      .catch(() => {});
+  }, []);
+
+  /* Gán bác sĩ cho 1 lịch tiêm */
+  const handleAssignDoctor = async (customerScheduleId, doctorId) => {
+    try {
+      const url = isAdmin
+        ? '/api/customer-schedule/admin/assign-doctor'
+        : '/api/customer-schedule/staff/assign-doctor-nurse';
+      const res = await fetch('http://localhost:8080' + url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ customerScheduleId, doctorId, nurseId: null }),
+      });
+      if (res.ok) {
+        AppNotification.success('Đã gán bác sĩ thành công');
+        loadData(formSearch);
+      } else {
+        AppNotification.error('Gán bác sĩ thất bại');
+      }
+    } catch {
+      AppNotification.error('Lỗi kết nối');
+    }
+  };
   useEffect(() => { loadData(formSearch); }, [formSearch]);
   useEffect(() => { loadData({ ...formSearch, page: curPage, limit: pageSize }); }, [curPage]);
 
@@ -181,6 +219,7 @@ const CustomerSchedule = () => {
     { label: 'Đã duyệt', value: 'confirmed' },
     { label: 'Từ chối', value: 'cancelled' },
     { label: 'Đã tiêm', value: 'injected' },
+    { label: 'Đã hoãn', value: 'not_injected' },
   ];
 
   return (
@@ -241,7 +280,7 @@ const CustomerSchedule = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['#','Vaccine','Khách hàng','Thanh toán','Ngày tạo','Thời gian KT','Trạng thái','Hành động'].map(h => (
+                {['#','Vaccine','Khách hàng','Thanh toán','Ngày tạo','Thời gian KT','Trạng thái','Bác sĩ phụ trách','Hành động'].map(h => (
                   <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11.5, fontWeight: 700,
                     color: T2, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: `1px solid ${B}`, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -249,9 +288,9 @@ const CustomerSchedule = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
+                <tr><td colSpan={9} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có dữ liệu</td></tr>
+                <tr><td colSpan={9} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có dữ liệu</td></tr>
               ) : items.map(item => (
                 <tr key={item.id} style={{ borderBottom: `1px solid ${B}`, transition: 'background .15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -280,6 +319,31 @@ const CustomerSchedule = () => {
                       {STATUS_LABEL[item.status] || item.status}
                     </span>
                   </td>
+                  {/* Bác sĩ phụ trách */}
+                  <td style={{ padding: '12px 16px' }}>
+                    {item.status === 'cancelled' || item.status === 'finished' ? (
+                      <span style={{ fontSize: 13, color: T }}>
+                        {item.doctor?.fullName || '—'}
+                      </span>
+                    ) : (
+                      <select
+                        value={item.doctor?.id || ''}
+                        onChange={(e) => handleAssignDoctor(item.id, e.target.value ? Number(e.target.value) : null)}
+                        style={{
+                          padding: '6px 10px', borderRadius: 7, fontSize: 12.5,
+                          border: `1.5px solid ${B}`, background: '#fff', color: T,
+                          outline: 'none', minWidth: 150,
+                        }}
+                      >
+                        <option value="">— Chọn bác sĩ —</option>
+                        {doctors.map(d => (
+                          <option key={d.id} value={d.id}>
+                            {d.fullName || d.user?.email || `BS#${d.id}`}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
                   <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {item.status === 'pending' && (<>
@@ -301,14 +365,12 @@ const CustomerSchedule = () => {
                         </button>
                       </>)}
                       {item.status === 'confirmed' && (
-                        <button onClick={() => handleApprove(item.id, 'injected')} title="Xác nhận đã tiêm" style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 8,
-                          border: `1.5px solid ${A}22`, background: `${A}11`, color: A, cursor: 'pointer', fontSize: 12.5, fontWeight: 700, transition: 'all .15s',
-                        }}
-                          onMouseEnter={e => { e.currentTarget.style.background = A; e.currentTarget.style.color = '#fff'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = `${A}11`; e.currentTarget.style.color = A; }}>
-                          <FontAwesomeIcon icon={faSyringe} /> Đã tiêm
-                        </button>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          fontSize: 11.5, color: T2, fontStyle: 'italic',
+                        }} title="Chỉ bác sĩ phụ trách mới có thể đánh dấu đã tiêm sau khi sàng lọc">
+                          ⏳ Chờ bác sĩ tiêm
+                        </span>
                       )}
                     </div>
                   </td>

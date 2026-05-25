@@ -205,7 +205,13 @@ public class VaccinationCertificateService {
         return String.format("IV-%d-%d", year, suffix);
     }
 
-    /* ─── Hash các trường quan trọng + secret để chống sửa ─── */
+    /* ─── Hash các trường quan trọng + secret để chống sửa ───
+     *
+     * QUAN TRỌNG: Timestamp được normalize về seconds-precision (chia 1000)
+     * vì MySQL DATETIME mặc định KHÔNG lưu fractional seconds. Nếu dùng
+     * Timestamp.toString() thẳng → trước save có millis "...:56.789",
+     * sau reload mất millis "...:56.0" → hash khác nhau → verify fail.
+     * ──────────────────────────────────────────────────────────── */
     public String computeHash(VaccinationCertificate cert) {
         try {
             String payload = String.join("|",
@@ -216,7 +222,7 @@ public class VaccinationCertificateService {
                     nz(cert.getIdCardSnapshot()),
                     nz(cert.getVaccineName()),
                     String.valueOf(cert.getDoseNumber()),
-                    cert.getInjectionDate() != null ? cert.getInjectionDate().toString() : "",
+                    tsToSec(cert.getInjectionDate()),  // ← seconds-precision
                     HASH_SECRET
             );
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -229,6 +235,10 @@ public class VaccinationCertificateService {
         }
     }
     private String nz(String s) { return s == null ? "" : s; }
+    /** Quy về epoch-seconds — bỏ millis để khớp với độ chính xác của DB. */
+    private String tsToSec(Timestamp ts) {
+        return ts == null ? "" : String.valueOf(ts.getTime() / 1000L);
+    }
 
     /* ──────────────────────────────────────────────────────────────
        Tìm cert theo serial — dùng cho trang verify public
@@ -276,6 +286,34 @@ public class VaccinationCertificateService {
        ────────────────────────────────────────────────────────────── */
     public Optional<VaccinationCertificate> findById(Long id) {
         return certRepository.findById(id);
+    }
+
+    /* ──────────────────────────────────────────────────────────────
+       Admin: tính lại hash cho cert legacy bị sai do bug ms-precision.
+       Chỉ rehash những cert có hash KHÔNG khớp (tức là legacy hỏng),
+       cert vẫn dùng nguyên data snapshot — không sửa nội dung.
+       Trả về số lượng cert đã rehash.
+       ────────────────────────────────────────────────────────────── */
+    @Transactional
+    public int rehashLegacyCertificates() {
+        int count = 0;
+        for (VaccinationCertificate cert : certRepository.findAll()) {
+            String expected = computeHash(cert);
+            if (expected != null && !expected.equals(cert.getHash())) {
+                cert.setHash(expected);
+                certRepository.save(cert);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Transactional
+    public VaccinationCertificate rehashOne(Long id) {
+        VaccinationCertificate cert = certRepository.findById(id)
+                .orElseThrow(() -> new MessageException("Không tìm thấy giấy xác nhận!"));
+        cert.setHash(computeHash(cert));
+        return certRepository.save(cert);
     }
 
     /* ──────────────────────────────────────────────────────────────

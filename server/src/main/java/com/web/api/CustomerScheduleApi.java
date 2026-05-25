@@ -112,6 +112,13 @@ public class CustomerScheduleApi {
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
+    // Admin phân công bác sĩ cho lịch tiêm (sau khi bỏ role Staff)
+    @PostMapping("/admin/assign-doctor")
+    public ResponseEntity<?> assignDoctorByAdmin(@RequestBody AssignDoctorNurseRequest request) {
+        customerScheduleService.assignDoctorNurse(request);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
     // Bác sĩ xem danh sách bệnh nhân được phân công
     @PostMapping("/doctor/my-patients")
     public ResponseEntity<?> doctorPatients(@RequestBody ListCustomerScheduleRequest request) {

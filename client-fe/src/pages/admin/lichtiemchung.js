@@ -10,7 +10,6 @@ import {
   faSearch, faFilter, faX, faClock, faUsers,
 } from '@fortawesome/free-solid-svg-icons';
 import AdminGioTiemChung from './giotiem';
-import AdminBacSiNgayTiem from './doctorinjectdate';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 
 const P = '#2A388F', A = '#0ea5e9', S = '#10b981', D = '#ef4444', W = '#f59e0b';
@@ -230,8 +229,6 @@ const AdminLichTiemChung = () => {
                         <IconBtn onClick={() => handleDelete(item.id)} color={D} icon={faTrash} title="Xóa" />
                         <IconBtn onClick={() => setLichTiem(item)} color={S} icon={faClock}  title="Giờ tiêm"
                           btnProps={{ 'data-bs-toggle': 'modal', 'data-bs-target': '#modalGioTiem' }} />
-                        <IconBtn onClick={() => setLichTiem(item)} color={A} icon={faUsers}  title="Bác sĩ / Ngày tiêm"
-                          btnProps={{ 'data-bs-toggle': 'modal', 'data-bs-target': '#modalDoctorInjectdate' }} />
                       </div>
                     </td>
                   </tr>
@@ -261,7 +258,6 @@ const AdminLichTiemChung = () => {
       </div>
 
       <AdminGioTiemChung lichtiem={lichTiem} />
-      <AdminBacSiNgayTiem lichtiem={lichTiem} />
     </div>
   );
 };

@@ -71,14 +71,16 @@ function Login() {
     const role = user?.authorities?.name;
     if (role === "Admin") {
       window.location.href = "/admin/index";
+    } else if (role === "Doctor") {
+      window.location.href = "/doctor/dashboard";
     } else if (role === "Customer") {
       window.location.href = "/";
-    } else if (role === "Doctor") {
-      window.location.href = "/staff/customer-schedule-1";
-    } else if (role === "Nurse") {
-      window.location.href = "/staff/vaccine";
-    } else if (role === "Support Staff") {
-      window.location.href = "/staff/chat";
+    } else {
+      // Nurse / Support Staff cũ → role không còn dùng → ép logout
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      toast.warning("Tài khoản role '" + role + "' không còn hoạt động. Vui lòng liên hệ admin.");
+      setTimeout(() => { window.location.href = "/login"; }, 2000);
     }
   }
 

@@ -153,7 +153,12 @@ export default function CustomerScheduleView() {
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <button onClick={() => nav('/staff/customer-schedule-1-detail', { state: item.id })}
+                      <button onClick={() => {
+                        // Detect context: nếu URL đang ở /admin/* → vào trang admin tương ứng
+                        const isAdmin = window.location.pathname.startsWith('/admin/');
+                        const target = isAdmin ? '/admin/campaign-detail' : '/staff/customer-schedule-1-detail';
+                        nav(target, { state: item.id });
+                      }}
                         title="Chi tiết" style={{
                           width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
                           border: `1.5px solid ${A}22`, background: `${A}11`, color: A, cursor: 'pointer', fontSize: 14, transition: 'all .15s',

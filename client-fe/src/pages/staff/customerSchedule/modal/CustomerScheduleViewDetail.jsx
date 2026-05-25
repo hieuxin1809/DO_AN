@@ -135,6 +135,43 @@ export const CustomerScheduleViewDetail = () => {
         setPageSize(pageSize);
     };
 
+    /* ─── Load doctors list cho dropdown gán ─── */
+    const [doctors, setDoctors] = useState([]);
+    useEffect(() => {
+        fetch('http://localhost:8080/api/doctor/public/find-all', {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        })
+            .then(r => r.ok ? r.json() : [])
+            .then(setDoctors)
+            .catch(() => {});
+    }, []);
+
+    /* ─── Gán bác sĩ cho 1 lịch tiêm ─── */
+    const handleAssignDoctor = async (customerScheduleId, doctorId) => {
+        try {
+            const isAdmin = window.location.pathname.startsWith('/admin/');
+            const url = isAdmin
+                ? '/api/customer-schedule/admin/assign-doctor'
+                : '/api/customer-schedule/staff/assign-doctor-nurse';
+            const res = await fetch('http://localhost:8080' + url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+                body: JSON.stringify({ customerScheduleId, doctorId, nurseId: null }),
+            });
+            if (res.ok) {
+                AppNotification.success('Đã gán bác sĩ thành công');
+                handleCustomerSchedules(formSearch);
+            } else {
+                AppNotification.error('Gán bác sĩ thất bại');
+            }
+        } catch (e) {
+            AppNotification.error('Lỗi kết nối');
+        }
+    };
+
     const handleSubmit = async () => {
 
         console.log(state)
@@ -383,6 +420,28 @@ export const CustomerScheduleViewDetail = () => {
                 {text === "confirmed" ? "Đủ điều kiện" : text === "pending" ? "Chưa đủ điều kiện" : text === "cancelled" ? "Đã từ chối" : text === "injected" ? "Đã tiêm" : text === "not_injected" ? "Chưa tiêm" : ""}
             </Tag>);
         },
+    },
+    {
+        title: "Bác sĩ phụ trách",
+        dataIndex: "doctor",
+        key: "doctor",
+        render: (_, record) => (
+            <Select
+                value={record.doctor?.id || undefined}
+                onChange={(doctorId) => handleAssignDoctor(record.id, doctorId)}
+                placeholder="Chọn bác sĩ"
+                style={{ minWidth: 180 }}
+                allowClear
+                showSearch
+                optionFilterProp="children"
+            >
+                {doctors.map(d => (
+                    <Option key={d.id} value={d.id}>
+                        {d.fullName || d.user?.email || `BS#${d.id}`}
+                    </Option>
+                ))}
+            </Select>
+        ),
     },{
         title: "Tình trạng sức khỏe trước tiêm",
         dataIndex: "healthStatusBefore",

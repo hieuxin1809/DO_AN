@@ -1,68 +1,180 @@
+import { useState, useEffect, useRef } from "react";
 import avatar from "../../assest/images/user.svg";
-import { useEffect, useState } from "react";
 
-function DoctorLayout({ children }) {
-  const [isCssLoaded, setCssLoaded] = useState(false);
+const P  = "#2A388F";
+const A  = "#0ea5e9";
+const S  = "#10b981";
+const B  = "#e2e8f0";
+const T  = "#1e293b";
+const T2 = "#64748b";
 
-  useEffect(() => {
-    if (!isCssLoaded) {
-      import("../staff/layout.scss").then(() => setCssLoaded(true));
-    }
-  }, [isCssLoaded]);
-
-  const user = (() => { try { return JSON.parse(localStorage.getItem("user")) || {}; } catch { return {}; } })();
-
-  return (
-    <>
-      <div className="navleft">
-        <div className="divroot">
-          <img src={avatar} alt="Avatar" />
-          <div className="name-status">
-            <h4>Bác sĩ</h4>
-            <span className="online-status">
-              <i className="fa fa-circle"></i> Online
-            </span>
-          </div>
-        </div>
-        <div className="listmenumain">
-          <a href="/doctor/patients">
-            <i className="fa fa-users"></i> Bệnh nhân của tôi
-          </a>
-          <a href="/doctor/lich-tiem">
-            <i className="fa fa-calendar"></i> Lịch tiêm và Khách hàng
-          </a>
-          <a href="/doctor/chat">
-            <i className="fa fa-envelope"></i> Tin nhắn
-          </a>
-          <a href="#" onClick={() => logout()}>
-            <i className="fa fa-sign-out"></i> Đăng xuất
-          </a>
-        </div>
-      </div>
-
-      <div className="header">
-        <div className="header-left"></div>
-        <div className="header-right">
-          <div className="profile">
-            <img src={avatar} alt="Avatar" />
-            <span>{user.email || "Bác sĩ"}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="contentadminweb">
-        <div className="contentmain">
-          <div className="table-section">{children}</div>
-        </div>
-      </div>
-    </>
-  );
-}
+const NAV = [
+  { href: "dashboard",     icon: "fa-home",        label: "Trang chủ" },
+  { href: "today-queue",   icon: "fa-calendar",    label: "Lịch tiêm hôm nay" },
+  { href: "my-patients",   icon: "fa-users",       label: "Bệnh nhân của tôi" },
+  { href: "chat",          icon: "fa-envelope",    label: "Tin nhắn" },
+  { href: "reports",       icon: "fa-line-chart",  label: "Báo cáo cá nhân" },
+  { href: "profile",       icon: "fa-user-md",     label: "Hồ sơ cá nhân" },
+];
 
 function logout() {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
   window.location.replace("/login");
+}
+
+function DoctorLayout({ children }) {
+  const [dropOpen, setDropOpen] = useState(false);
+  const dropRef = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const user = (() => {
+    try { return JSON.parse(localStorage.getItem("user") || "{}"); }
+    catch { return {}; }
+  })();
+  const displayName = user.fullName || user.email || "Bác sĩ";
+
+  const currentSlug = window.location.pathname.split("/").filter(Boolean).pop() || "";
+
+  return (
+    <>
+      <div style={{
+        position: "fixed", top: 0, left: 0, height: "100vh", width: 240,
+        background: `linear-gradient(180deg, ${T} 0%, #0f172a 100%)`,
+        display: "flex", flexDirection: "column", zIndex: 200,
+        boxShadow: "4px 0 20px rgba(0,0,0,.18)",
+      }}>
+        <div style={{ padding: "20px 22px 16px", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12,
+              background: `linear-gradient(135deg,${P},${A})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: `0 4px 12px rgba(42,56,143,.4)`, flexShrink: 0,
+            }}>
+              <i className="fa fa-user-md" style={{ color: "#fff", fontSize: 17 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: ".3px" }}>
+                Ivaccine
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,.45)", marginTop: 1 }}>Bác sĩ</div>
+            </div>
+          </div>
+        </div>
+
+        <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
+          {NAV.map((item) => {
+            const active = currentSlug === item.href;
+            return (
+              <a key={item.href} href={item.href}
+                style={{
+                  display: "flex", alignItems: "center", gap: 11,
+                  padding: "10px 14px", borderRadius: 10, marginBottom: 3,
+                  textDecoration: "none", transition: "all .15s",
+                  background: active ? `linear-gradient(135deg,${P},${A})` : "transparent",
+                  color: active ? "#fff" : "rgba(255,255,255,.65)",
+                  boxShadow: active ? `0 3px 10px rgba(42,56,143,.4)` : "none",
+                  fontWeight: active ? 700 : 500, fontSize: 13.5,
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,.06)"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+              >
+                <i className={`fa ${item.icon}`}
+                  style={{ fontSize: 15, width: 18, textAlign: "center", flexShrink: 0 }} />
+                {item.label}
+              </a>
+            );
+          })}
+        </nav>
+
+        <div style={{ padding: "12px 10px", borderTop: "1px solid rgba(255,255,255,.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px" }}>
+            <img src={avatar} alt="" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "#fff",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {displayName}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: S, display: "inline-block" }} />
+                <span style={{ fontSize: 11, color: S }}>Online</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        position: "fixed", top: 0, left: 240, right: 0, height: 60,
+        background: "#fff", borderBottom: `1px solid ${B}`,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 24px", zIndex: 190, boxShadow: "0 1px 8px rgba(0,0,0,.05)",
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: T2 }}>
+          <span style={{ color: T2 }}>Bác sĩ </span>
+          <span style={{ color: B, margin: "0 6px" }}>›</span>
+          <span style={{ color: T }}>
+            {NAV.find((n) => n.href === currentSlug)?.label || "Dashboard"}
+          </span>
+        </div>
+
+        <div ref={dropRef} style={{ position: "relative" }}>
+          <button onClick={() => setDropOpen(!dropOpen)}
+            style={{
+              display: "flex", alignItems: "center", gap: 9, padding: "6px 12px",
+              background: dropOpen ? "#f1f5f9" : "#fff",
+              border: `1px solid ${B}`, borderRadius: 10, cursor: "pointer", transition: "all .15s",
+            }}>
+            <img src={avatar} alt="" style={{ width: 28, height: 28, borderRadius: 7 }} />
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T, lineHeight: 1.2 }}>{displayName}</div>
+              <div style={{ fontSize: 11, color: S }}>● Online</div>
+            </div>
+            <i className={`fa fa-chevron-${dropOpen ? "up" : "down"}`}
+              style={{ fontSize: 11, color: T2, marginLeft: 2 }} />
+          </button>
+
+          {dropOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 8px)", right: 0,
+              background: "#fff", borderRadius: 12, border: `1px solid ${B}`,
+              boxShadow: "0 10px 30px rgba(0,0,0,.12)", minWidth: 180, zIndex: 9999, overflow: "hidden",
+            }}>
+              <div style={{ padding: "12px 16px", borderBottom: `1px solid ${B}`,
+                background: `linear-gradient(135deg,${P}08,${A}08)` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T }}>{displayName}</div>
+                <div style={{ fontSize: 12, color: T2, marginTop: 2 }}>Bác sĩ</div>
+              </div>
+              <button onClick={logout}
+                style={{
+                  width: "100%", padding: "11px 16px", border: "none", background: "none",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 9,
+                  fontSize: 13.5, fontWeight: 600, color: "#ef4444",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#fef2f2"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+              >
+                <i className="fa fa-sign-out" style={{ fontSize: 14 }} />
+                Đăng xuất
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ marginLeft: 240, paddingTop: 60, minHeight: "100vh", background: "#f1f5f9" }}>
+        <div style={{ padding: 24 }}>{children}</div>
+      </div>
+    </>
+  );
 }
 
 export default DoctorLayout;

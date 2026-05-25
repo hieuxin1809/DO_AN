@@ -1,6 +1,7 @@
 import layoutAdmin from "../layout/admin/Layout";
 import layoutLogin from "../layout/customer/loginlayout/login";
 import layoutStaff from "../layout/staff/Layout";
+import layoutDoctor from "../layout/doctor/Layout";
 
 //admin
 import homeAdmin from "../pages/admin/index";
@@ -12,6 +13,14 @@ import CenterAdmin from "../pages/admin/center";
 import AddCenterAdmin from "../pages/admin/addcenter";
 import AdminCertificates from "../pages/admin/certificates";
 import AdminReminders from "../pages/admin/reminders";
+
+//doctor (new)
+import DoctorDashboard   from "../pages/doctor/dashboard";
+import DoctorTodayQueue  from "../pages/doctor/today-queue";
+import DoctorMyPatients  from "../pages/doctor/my-patients";
+import DoctorChat        from "../pages/doctor/chat";
+import DoctorReports     from "../pages/doctor/reports";
+import DoctorProfile     from "../pages/doctor/profile";
 
 //public
 import login from "../pages/public/login";
@@ -107,6 +116,13 @@ const adminRoutes = [
     },
     { path: "/admin/certificates", component: AdminCertificates, layout: layoutAdmin },
     { path: "/admin/reminders",    component: AdminReminders,    layout: layoutAdmin },
+    /* Alias staff pages → admin (cùng component, đổi layout) */
+    { path: "/admin/vaccines",      component: Vaccine,                  layout: layoutAdmin },
+    { path: "/admin/add-vaccine",   component: StaffAddVaccine,          layout: layoutAdmin },
+    { path: "/admin/inventory",     component: VaccineInventory,         layout: layoutAdmin },
+    { path: "/admin/registrations", component: CustomerSchedule,         layout: layoutAdmin },
+    { path: "/admin/campaigns",     component: CustomerScheduleView,     layout: layoutAdmin },
+    { path: "/admin/campaign-detail", component: CustomerScheduleViewDetail, layout: layoutAdmin },
 ];
 
 const staffRoutes = [
@@ -122,4 +138,13 @@ const staffRoutes = [
 ];
 
 
-export {publicRoutes, adminRoutes, customerRoutes, staffRoutes};
+const doctorRoutes = [
+    { path: "/doctor/dashboard",    component: DoctorDashboard,  layout: layoutDoctor },
+    { path: "/doctor/today-queue",  component: DoctorTodayQueue, layout: layoutDoctor },
+    { path: "/doctor/my-patients",  component: DoctorMyPatients, layout: layoutDoctor },
+    { path: "/doctor/chat",         component: DoctorChat,       layout: layoutDoctor },
+    { path: "/doctor/reports",      component: DoctorReports,    layout: layoutDoctor },
+    { path: "/doctor/profile",      component: DoctorProfile,    layout: layoutDoctor },
+];
+
+export {publicRoutes, adminRoutes, customerRoutes, staffRoutes, doctorRoutes};
