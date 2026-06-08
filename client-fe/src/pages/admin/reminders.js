@@ -100,7 +100,7 @@ const AdminReminders = () => {
 
   const triggerReminder = async (type) => {
     const opts = type === 'UPCOMING_INJECTION'
-      ? { html: 'Gửi reminder cho các lịch tiêm <strong>ngày mai</strong>?<br/>(test thủ công, bỏ qua cron 8h sáng)' }
+      ? { html: 'Gửi reminder cho các lịch tiêm <strong>ngày mai</strong>?<br/>' }
       : { html: 'Gửi reminder <strong>mũi tiếp theo</strong> cho mọi user có vaccine nhiều mũi đến hạn?' };
     const { isConfirmed } = await Swal.fire({
       title: 'Gửi reminder thủ công?', ...opts, icon: 'question',

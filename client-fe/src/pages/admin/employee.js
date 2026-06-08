@@ -7,7 +7,7 @@ import { getMethod, deleteMethod, putMethod, uploadSingleFile } from '../../serv
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faUserMd, faSearch, faEdit, faTrash, faEye, faX,
-  faStar, faBriefcase, faUserNurse,
+  faStar, faBriefcase,
 } from '@fortawesome/free-solid-svg-icons';
 
 const P = '#2A388F', A = '#0ea5e9', S = '#10b981', D = '#ef4444', W = '#f59e0b';
@@ -80,7 +80,6 @@ function ModalOverlay({ open, onClose, title, children, footer, size = 600 }) {
 
 /* ════════════════════════════════════ */
 const Employee = () => {
-  const [activeTab,   setActiveTab]   = useState('doctors');
   const [items,       setItems]       = useState([]);
   const [pageCount,   setPageCount]   = useState(0);
   const [curPage,     setCurPage]     = useState(0);
@@ -95,14 +94,15 @@ const Employee = () => {
 
   const avatarRef = useRef(null);
 
-  const isDoctors = activeTab === 'doctors';
+  // Hệ thống hiện chỉ quản lý Bác sĩ — role Y tá đã được bỏ
+  const isDoctors = true;
 
-  useEffect(() => { setCurPage(0); loadData(0); }, [activeTab, searchTerm]);
+  useEffect(() => { setCurPage(0); loadData(0); }, [searchTerm]);
 
   const loadData = async (page) => {
     setLoading(true);
     try {
-      const base = isDoctors ? '/api/doctor/admin/list-doctor' : '/api/nurse/admin/list-nurse';
+      const base = '/api/doctor/admin/list-doctor';
       const url  = `${base}?page=${page}&size=${PAGE_SIZE}&sort=id,asc${searchTerm ? '&q=' + encodeURIComponent(searchTerm) : ''}`;
       const res  = await getMethod(url);
       const data = await res.json();
@@ -118,14 +118,13 @@ const Employee = () => {
 
   const handleDelete = async (id, name) => {
     const { isConfirmed } = await Swal.fire({
-      title: `Xóa ${isDoctors ? 'bác sĩ' : 'y tá'}?`,
+      title: 'Xóa bác sĩ?',
       html: `Bạn có chắc muốn xóa <strong>${name}</strong>?`,
       icon: 'warning', showCancelButton: true,
       confirmButtonColor: D, confirmButtonText: 'Xóa', cancelButtonText: 'Hủy',
     });
     if (!isConfirmed) return;
-    const baseUrl = isDoctors ? `/api/doctor/admin/delete/${id}` : `/api/nurse/admin/delete/${id}`;
-    const res = await deleteMethod(baseUrl);
+    const res = await deleteMethod(`/api/doctor/admin/delete/${id}`);
     if (res.status < 300)       { toast.success('Xóa thành công!'); loadData(0); }
     else if (res.status === 417){ const d = await res.json(); toast.warning(d.defaultMessage); }
     else                         toast.error('Có lỗi khi xóa');
@@ -137,10 +136,7 @@ const Employee = () => {
       const url = await uploadSingleFile(avatarRef.current);
       if (url) editItem.avatar = url;
     }
-    const baseUrl = isDoctors
-      ? `/api/doctor/admin/update/${editItem.id}`
-      : `/api/nurse/admin/update/${editItem.id}`;
-    const res = await putMethod(baseUrl, editItem);
+    const res = await putMethod(`/api/doctor/admin/update/${editItem.id}`, editItem);
     if (res.status < 300) {
       toast.success('Cập nhật thành công!');
       loadData(curPage);
@@ -150,11 +146,6 @@ const Employee = () => {
       toast.error(d.defaultMessage || 'Có lỗi xảy ra');
     }
   };
-
-  const tabConfig = [
-    { key: 'doctors', label: 'Bác sĩ', icon: faUserMd, color: P },
-    { key: 'nurses',  label: 'Y tá',   icon: faUserNurse, color: S },
-  ];
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -169,37 +160,12 @@ const Employee = () => {
           <FontAwesomeIcon icon={faUserMd} style={{ color: '#fff', fontSize: 20 }} />
         </div>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: T }}>Nhân viên y tế</h2>
-          <div style={{ fontSize: 13, color: T2 }}>Quản lý bác sĩ và y tá</div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: T }}>Quản lý Bác sĩ</h2>
+          <div style={{ fontSize: 13, color: T2 }}>Danh sách bác sĩ trong hệ thống · Tổng {total} người</div>
         </div>
       </div>
 
-      {/* ── tabs ── */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-        {tabConfig.map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-            padding: '9px 22px', borderRadius: 10, border: 'none', cursor: 'pointer',
-            fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
-            transition: 'all .15s',
-            background: activeTab === tab.key
-              ? `linear-gradient(135deg,${tab.color},${tab.color}cc)`
-              : '#fff',
-            color: activeTab === tab.key ? '#fff' : T2,
-            boxShadow: activeTab === tab.key
-              ? `0 4px 12px ${tab.color}44`
-              : `0 1px 4px rgba(0,0,0,.06)`,
-            border: activeTab === tab.key ? 'none' : `1px solid ${B}`,
-          }}>
-            <FontAwesomeIcon icon={tab.icon} />
-            {tab.label}
-            <span style={{
-              fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 10,
-              background: activeTab === tab.key ? 'rgba(255,255,255,.25)' : `rgba(42,56,143,.08)`,
-              color: activeTab === tab.key ? '#fff' : P,
-            }}>{activeTab === tab.key ? total : ''}</span>
-          </button>
-        ))}
-      </div>
+      {/* (Tabs Bác sĩ/Y tá đã bị bỏ — hệ thống chỉ còn Bác sĩ) */}
 
       {/* ── table card ── */}
       <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden',
@@ -209,7 +175,7 @@ const Employee = () => {
           display: 'flex', alignItems: 'center', gap: 10 }}>
           <FontAwesomeIcon icon={faSearch} style={{ color: T2, fontSize: 14, flexShrink: 0 }} />
           <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-            placeholder={`Tìm ${isDoctors ? 'bác sĩ' : 'y tá'} theo tên, email...`}
+            placeholder={`Tìm ${'bác sĩ'} theo tên, email...`}
             style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: T, background: 'transparent' }} />
           {searchTerm && (
             <button onClick={() => setSearchTerm('')}
@@ -223,8 +189,8 @@ const Employee = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['#', isDoctors ? 'Bác sĩ' : 'Y tá',
-                  isDoctors ? 'Chuyên môn' : 'Trình độ',
+                {['#', 'Bác sĩ',
+                  'Chuyên môn',
                   'Kinh nghiệm', 'Mô tả', 'Hành động'].map(h => (
                   <th key={h} style={{ padding: '12px 18px', textAlign: 'left', fontSize: 12,
                     fontWeight: 700, color: T2, textTransform: 'uppercase', letterSpacing: '.4px',
@@ -237,7 +203,7 @@ const Employee = () => {
                 <tr><td colSpan={6} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
               ) : items.length === 0 ? (
                 <tr><td colSpan={6} style={{ padding: 52, textAlign: 'center', color: T2 }}>
-                  {searchTerm ? `Không tìm thấy "${searchTerm}"` : `Chưa có ${isDoctors ? 'bác sĩ' : 'y tá'} nào`}
+                  {searchTerm ? `Không tìm thấy "${searchTerm}"` : `Chưa có ${'bác sĩ'} nào`}
                 </td></tr>
               ) : items.map((item, idx) => (
                 <tr key={item.id}
@@ -260,10 +226,10 @@ const Employee = () => {
                     </div>
                   </td>
                   <td style={{ padding: '13px 18px' }}>
-                    {(isDoctors ? item.specialization : item.qualification) ? (
+                    {(item.specialization) ? (
                       <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
                         background: `rgba(42,56,143,.08)`, color: P }}>
-                        {isDoctors ? item.specialization : item.qualification}
+                        {item.specialization}
                       </span>
                     ) : <span style={{ color: T2 }}>—</span>}
                   </td>
@@ -320,7 +286,7 @@ const Employee = () => {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexWrap: 'wrap', gap: 12 }}>
             <span style={{ fontSize: 13, color: T2 }}>
-              Trang {curPage + 1} / {pageCount} &nbsp;·&nbsp; Tổng {total} {isDoctors ? 'bác sĩ' : 'y tá'}
+              Trang {curPage + 1} / {pageCount} &nbsp;·&nbsp; Tổng {total} {'bác sĩ'}
             </span>
             <ReactPaginate
               pageCount={pageCount} marginPagesDisplayed={1} pageRangeDisplayed={5}
@@ -335,7 +301,7 @@ const Employee = () => {
 
       {/* ── Detail Modal ── */}
       <ModalOverlay open={showDetail} onClose={() => setShowDetail(false)}
-        title={`Chi tiết ${isDoctors ? 'bác sĩ' : 'y tá'}`} size={540}
+        title={`Chi tiết ${'bác sĩ'}`} size={540}
         footer={
           <button onClick={() => setShowDetail(false)} style={{
             padding: '9px 22px', borderRadius: 9, border: `1.5px solid ${B}`,
@@ -369,7 +335,7 @@ const Employee = () => {
             {[
               ['Email', selected.email],
               ['Điện thoại', selected.phone],
-              [isDoctors ? 'Chuyên môn' : 'Trình độ', isDoctors ? selected.specialization : selected.qualification],
+              ['Chuyên môn', isDoctors ? selected.specialization : selected.qualification],
               ['Mô tả', selected.bio],
             ].map(([k, v]) => v ? (
               <div key={k} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: `1px solid ${B}` }}>
@@ -383,7 +349,7 @@ const Employee = () => {
 
       {/* ── Edit Modal ── */}
       <ModalOverlay open={showEdit} onClose={() => setShowEdit(false)}
-        title={`Cập nhật ${isDoctors ? 'bác sĩ' : 'y tá'}: ${editItem?.fullName || ''}`} size={560}
+        title={`Cập nhật ${'bác sĩ'}: ${editItem?.fullName || ''}`} size={560}
         footer={<>
           <button onClick={() => setShowEdit(false)} style={{
             padding: '9px 22px', borderRadius: 9, border: `1.5px solid ${B}`,
@@ -400,7 +366,7 @@ const Employee = () => {
               <input style={inpStyle(false)} value={editItem.fullName || ''}
                 onChange={e => setEditItem({ ...editItem, fullName: e.target.value })} />
             </Field>
-            <Field label={isDoctors ? 'Chuyên môn' : 'Trình độ'}>
+            <Field label={'Chuyên môn'}>
               <input style={inpStyle(false)}
                 value={isDoctors ? (editItem.specialization || '') : (editItem.qualification || '')}
                 onChange={e => setEditItem(isDoctors

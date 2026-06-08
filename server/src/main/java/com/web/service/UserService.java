@@ -14,6 +14,7 @@ import com.web.entity.Nurse;
 import com.web.entity.User;
 import com.web.repository.DoctorRepository;
 import com.web.repository.NurseRepository;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import com.web.enums.UserType;
@@ -394,7 +395,9 @@ public class UserService {
 
     public List<User> getUserByRole(String role) {
         if (role == null) {
-            return userRepository.findAll();
+            return userRepository.findAll(
+                    Sort.by(Sort.Direction.DESC, "createdDate")
+            );
         }
         return userRepository.getUserByRole(role);
     }

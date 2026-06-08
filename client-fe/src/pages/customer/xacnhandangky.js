@@ -197,6 +197,34 @@ function XacNhanDangky() {
     const [patientInfo,      setPatientInfo]      = useState(null); // {fullName, dob, phone, address}
     const [missingInfo,      setMissingInfo]      = useState(false);
 
+    /* Reservation state — slot bị hold trong 15 phút */
+    const [reservationId, setReservationId] = useState(null);
+    const [holdSecondsLeft, setHoldSecondsLeft] = useState(0);
+
+    /* Countdown tick */
+    useEffect(() => {
+        if (!reservationId || holdSecondsLeft <= 0) return;
+        const t = setInterval(() => {
+            setHoldSecondsLeft(s => {
+                if (s <= 1) {
+                    clearInterval(t);
+                    toast.warning('Đã hết thời gian giữ chỗ. Vui lòng đặt lại.');
+                    setShowPaypalModal(false);
+                    setReservationId(null);
+                    return 0;
+                }
+                return s - 1;
+            });
+        }, 1000);
+        return () => clearInterval(t);
+    }, [reservationId, holdSecondsLeft]);
+
+    const fmtCountdown = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    };
+
     useEffect(() => {
         const fetchData = async () => {
             const r1 = await getMethod('/api/customer-profile/customer/find-by-user');
@@ -223,7 +251,6 @@ function XacNhanDangky() {
         fetchData();
     }, []);
 
-    function codClick()    { document.getElementById('paytype-cod').click();  }
     function vnpayClick()  { document.getElementById('paytype-vnpay').click(); }
     function paypalClick() { document.getElementById('paytype-paypal').click(); }
 
@@ -265,40 +292,42 @@ function XacNhanDangky() {
         if (!window.confirm('Xác nhận đăng ký tiêm')) return;
 
         const paytype = event.target.elements.paytype.value;
-        if (paytype === 'paypal') {
-            setPendingPayload(getPayload(event));
-            setShowPaypalModal(true);
-        } else if (paytype === 'cod') {
-            dangKyCod(event);
-        } else if (paytype === 'vnpay') {
-            requestPayMentVnpay(event);
-        } else {
+        if (paytype !== 'paypal' && paytype !== 'vnpay') {
             toast.warning('Vui lòng chọn hình thức thanh toán!');
+            return;
         }
-    }
 
-    async function dangKyCod(event) {
         const payload = getPayload(event);
-        const res     = await postMethodPayload('/api/customer-schedule/customer/create-not-pay', payload);
-        const result  = await res.json();
-        if (res.status === 417) { toast.warning(result.defaultMessage); return; }
-        if (res.status < 300) {
-            try { sessionStorage.removeItem('patientInfo_' + vaccineTime.id); } catch(e){}
-            Swal.fire({
-                title: 'Thông báo',
-                text:  'Đăng ký thành công, hãy thanh toán trước 24h!',
-                icon:  'success',
-                preConfirm: () => { window.location.href = '/tai-khoan#lichtiem'; },
-            });
+
+        /* Reserve slot trước khi mở payment */
+        const reserveRes = await postMethodPayload('/api/customer-schedule/customer/reserve', payload);
+        if (reserveRes.status >= 300) {
+            try {
+                const j = await reserveRes.json();
+                toast.error(j.defaultMessage || 'Không giữ được slot');
+            } catch { toast.error('Không giữ được slot'); }
+            return;
+        }
+        const reserveData = await reserveRes.json();
+        const csId = reserveData.customerScheduleId;
+        const secs = reserveData.expiresInSeconds || (15 * 60);
+        setReservationId(csId);
+        setHoldSecondsLeft(secs);
+
+        if (paytype === 'paypal') {
+            setPendingPayload({ ...payload, customerScheduleId: csId });
+            setShowPaypalModal(true);
+        } else if (paytype === 'vnpay') {
+            requestPayMentVnpay(event, csId, payload);
         }
     }
 
-    async function requestPayMentVnpay(event) {
+    async function requestPayMentVnpay(event, customerScheduleId, payload) {
         const urlmain    = window.location.origin;
         const returnurl  = urlmain + '/thong-bao';
-        const payload    = getPayload(event);
         const paymentDto = { content: 'Thanh toán', returnUrl: returnurl, notifyUrl: returnurl, idScheduleTime: payload.vaccineScheduleTime.id };
-        localStorage.setItem('thongtindangky', JSON.stringify(payload));
+        // Lưu cả reservation id để /thong-bao dùng khi callback
+        localStorage.setItem('thongtindangky', JSON.stringify({ ...payload, customerScheduleId }));
         const res    = await postMethodPayload('/api/vnpay/urlpayment', paymentDto);
         const result = await res.json();
         if (res.status < 300)   window.open(result.url, '_blank');
@@ -336,15 +365,10 @@ function XacNhanDangky() {
             const payload = {
                 orderId:  orderId,
                 payType:  'PAYPAL',
-                fullName: pendingPayload.fullName,
-                address:  pendingPayload.address,
-                dob:      pendingPayload.dob,
-                phone:    pendingPayload.phone,
-                bookingForOther: pendingPayload.bookingForOther,
             };
-            console.log('[PayPal] calling backend finish-payment with:', payload);
+            console.log('[PayPal] calling backend finish-payment-schedule with:', payload);
             const res = await postMethodPayload(
-                `/api/customer-schedule/customer/finish-payment?id=${pendingPayload.vaccineScheduleTime.id}`,
+                `/api/customer-schedule/customer/finish-payment-schedule?id=${pendingPayload.customerScheduleId}`,
                 payload
             );
             console.log('[PayPal] backend response status:', res.status);
@@ -409,18 +433,36 @@ function XacNhanDangky() {
                     <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:'22px', alignItems:'start' }}>
 
                         {/* ===== LEFT: Form ===== */}
-                        <div>
+                        {/* paddingTop để đẩy cột trái xuống dưới hero (vì container cha có margin-top -30px),
+                            tránh banner sáng đè lên gradient xanh đậm của hero gây lệch thị giác */}
+                        <div style={{ paddingTop: 40 }}>
                             {/* Banner pre-filled */}
                             <div style={{
                                 marginBottom:'18px', padding:'12px 16px', borderRadius:'12px',
                                 background: bookingForOther ? '#fffbeb' : 'rgba(14,165,233,0.08)',
                                 border:`1px solid ${bookingForOther ? '#fde68a' : 'rgba(14,165,233,0.25)'}`,
                                 color: bookingForOther ? '#92400e' : T,
-                                fontSize:'13.5px', display:'flex', alignItems:'flex-start', gap:'10px',
+                                fontSize:'13.5px',
+                                display:'flex',
+                                alignItems:'center',          // ← center icon ngang với text
+                                gap:'12px',
                                 boxShadow:'0 2px 8px rgba(0,0,0,0.04)',
+                                lineHeight: 1.55,
                             }}>
-                                <span style={{ fontSize:'18px' }}>{bookingForOther ? '👶' : '✓'}</span>
-                                <span>
+                                {/* Icon — bọc trong khung cố định để emoji không "nổi" lệch */}
+                                <span style={{
+                                    flexShrink: 0,
+                                    width: 28, height: 28,
+                                    display:'inline-flex',
+                                    alignItems:'center',
+                                    justifyContent:'center',
+                                    fontSize:'20px',
+                                    lineHeight: 1,
+                                }}>
+                                    {bookingForOther ? '👶' : '✓'}
+                                </span>
+                                {/* Text — flex:1 để chiếm hết phần còn lại, không bị bóp */}
+                                <span style={{ flex: 1 }}>
                                     {bookingForOther
                                         ? <>Đăng ký <strong>cho người khác</strong>. Thông tin đã điền ở bước trước — vui lòng kiểm tra lại trước khi thanh toán.</>
                                         : <>Thông tin đã được điền sẵn từ hồ sơ của bạn. Bạn có thể sửa nếu cần.</>}
@@ -519,19 +561,12 @@ function XacNhanDangky() {
                                             title="Thanh toán qua VNPay"
                                             icon={<img src={vnpay} alt="VNPay" style={{ height:'28px', objectFit:'contain' }} />}
                                         />
-                                        {/* COD card */}
-                                        <PaymentMethodCard
-                                            onClick={codClick}
-                                            inputId="paytype-cod" value="cod"
-                                            title="Thanh toán sau"
-                                            icon={<span style={{ fontSize:'24px' }}>💵</span>}
-                                        />
                                     </div>
                                     <div style={{
                                         padding:'10px 22px 16px', fontSize:'12px', color:T2,
                                         background:'#fafbfc', borderTop:`1px solid ${B}`,
                                     }}>
-                                        ⏰ <strong>Lưu ý:</strong> Nếu chọn "Thanh toán sau" mà không thanh toán trong 24h, hệ thống sẽ tự động hủy lịch tiêm.
+                                        💳 <strong>Lưu ý:</strong> Bạn cần thanh toán ngay khi đăng ký. Hệ thống không hỗ trợ thanh toán sau.
                                     </div>
                                 </div>
 
@@ -628,7 +663,7 @@ function XacNhanDangky() {
                         boxShadow: '0 25px 60px rgba(0,0,0,.22)',
                     }}>
                         {/* Header */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                             <div>
                                 <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: T }}>Thanh toán qua PayPal</h3>
                                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: T2 }}>
@@ -643,6 +678,23 @@ function XacNhanDangky() {
                                 >×</button>
                             )}
                         </div>
+
+                        {/* Countdown — slot đang giữ */}
+                        {holdSecondsLeft > 0 && (
+                            <div style={{
+                                marginBottom: 14, padding: '8px 14px', borderRadius: 10,
+                                background: holdSecondsLeft < 60 ? '#fee2e2' : holdSecondsLeft < 180 ? '#fef3c7' : '#eff6ff',
+                                border: `1px solid ${holdSecondsLeft < 60 ? '#fecaca' : holdSecondsLeft < 180 ? '#fde68a' : '#dbeafe'}`,
+                                color: holdSecondsLeft < 60 ? '#991b1b' : holdSecondsLeft < 180 ? '#92400e' : '#1e40af',
+                                fontSize: 13, fontWeight: 600,
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            }}>
+                                <span>⏱ Đang giữ slot</span>
+                                <span style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800 }}>
+                                    {fmtCountdown(holdSecondsLeft)}
+                                </span>
+                            </div>
+                        )}
 
                         {/* PayPal Buttons */}
                         {paypalProcessing ? (

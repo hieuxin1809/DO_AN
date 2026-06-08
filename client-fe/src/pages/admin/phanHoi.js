@@ -5,7 +5,7 @@ import { getMethod } from '../../services/request';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCommentDots, faStar, faEye, faArrowsRotate,
-  faUserMd, faUserNurse, faGlobe,
+  faUserMd, faGlobe,
 } from '@fortawesome/free-solid-svg-icons';
 
 const P = '#2A388F', A = '#0ea5e9', S = '#10b981', W = '#f59e0b';
@@ -16,7 +16,6 @@ const TYPES = [
   { key: 'all',     label: 'Tất cả',  icon: faGlobe,      color: P },
   { key: 'general', label: 'Chung',   icon: faCommentDots,color: A },
   { key: 'doctor',  label: 'Bác sĩ',  icon: faUserMd,     color: S },
-  { key: 'nurse',   label: 'Y tá',    icon: faUserNurse,   color: W },
 ];
 
 /* ── Stars ── */
@@ -107,8 +106,8 @@ const AdminPhanHoi = () => {
     : '—';
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
-  const typeColor = { general: A, doctor: S, nurse: W };
-  const typeLabel = { general: 'Chung', doctor: 'Bác sĩ', nurse: 'Y tá' };
+  const typeColor = { general: A, doctor: S };
+  const typeLabel = { general: 'Chung', doctor: 'Bác sĩ' };
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -184,7 +183,7 @@ const AdminPhanHoi = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['#','Khách hàng','Đánh giá','Nội dung','Loại','Bác sĩ / Y tá','Ngày tạo','Chi tiết'].map(h => (
+                {['#','Khách hàng','Đánh giá','Nội dung','Loại','Bác sĩ','Ngày tạo','Chi tiết'].map(h => (
                   <th key={h} style={{ padding: '12px 18px', textAlign: 'left', fontSize: 12,
                     fontWeight: 700, color: T2, textTransform: 'uppercase', letterSpacing: '.4px',
                     borderBottom: `1px solid ${B}`, whiteSpace: 'nowrap' }}>{h}</th>
@@ -241,13 +240,7 @@ const AdminPhanHoi = () => {
                         {item.doctor.fullName}
                       </div>
                     )}
-                    {item.nurse?.fullName && (
-                      <div style={{ color: W, fontWeight: 600 }}>
-                        <FontAwesomeIcon icon={faUserNurse} style={{ marginRight: 4 }} />
-                        {item.nurse.fullName}
-                      </div>
-                    )}
-                    {!item.doctor && !item.nurse && <span style={{ color: T2 }}>—</span>}
+                    {!item.doctor && <span style={{ color: T2 }}>—</span>}
                   </td>
                   <td style={{ padding: '13px 18px', color: T2, fontSize: 13 }}>{fmtDate(item.createdDate)}</td>
                   <td style={{ padding: '13px 18px' }}>
@@ -314,7 +307,6 @@ const AdminPhanHoi = () => {
             {[
               ['Loại phản hồi', selected.feedbackType ? typeLabel[selected.feedbackType] || selected.feedbackType : null],
               ['Bác sĩ', selected.doctor?.fullName],
-              ['Y tá', selected.nurse?.fullName],
               ['ID lịch đăng ký', selected.customerSchedule?.id],
               ['Ngày tạo', selected.createdDate ? new Date(selected.createdDate).toLocaleString('vi-VN') : null],
             ].map(([k, v]) => v != null ? (

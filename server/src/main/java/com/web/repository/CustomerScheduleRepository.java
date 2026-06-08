@@ -38,8 +38,9 @@ public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedu
     @Query(value = "select c.* from customer_schedule c inner join vaccine_schedule_time vt on vt.id = c.vaccine_schedule_time_id\n" +
             "where vt.vaccine_schedule_id  = ?1 and vt.inject_date = DATE_SUB(?2, INTERVAL ?3 MONTH)", nativeQuery = true)
     List<CustomerSchedule> findByVaccineScheduleAndDate(Long id, Date date, Integer numMonth);
+    /** Entity injectDate là java.sql.Date — bắt buộc param phải khớp type, không dùng LocalDate. */
     @Query("SELECT c FROM CustomerSchedule c WHERE c.vaccineScheduleTime.injectDate = :injectDate")
-    List<CustomerSchedule> findByInjectDate(@Param("injectDate") LocalDate injectDate);
+    List<CustomerSchedule> findByInjectDate(@Param("injectDate") java.sql.Date injectDate);
     long countByVaccineScheduleTimeId(Long vaccineScheduleTimeId);
 
     @Query("select count(c.id) from CustomerSchedule c where c.vaccineScheduleTime.vaccineSchedule.vaccine.id = ?1")
@@ -84,4 +85,9 @@ public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedu
     /** Đếm tổng theo từng status — trả về [status, count] */
     @Query("SELECT c.statusCustomerSchedule, COUNT(c) FROM CustomerSchedule c GROUP BY c.statusCustomerSchedule")
     List<Object[]> countByStatusGroup();
+
+    /** Tìm các reservation đang hold quá hạn (status = pending_payment + createdDate < cutoff) */
+    @Query("SELECT c FROM CustomerSchedule c WHERE c.statusCustomerSchedule = :status AND c.createdDate < :cutoff")
+    List<CustomerSchedule> findExpiredHolds(@Param("status") StatusCustomerSchedule status,
+                                            @Param("cutoff") Timestamp cutoff);
 }

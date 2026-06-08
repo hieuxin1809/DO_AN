@@ -10,7 +10,6 @@ import lichTiemChungAdmin from "../pages/admin/lichtiemchung";
 import addLichTiemChungAdmin from "../pages/admin/addlichtiemchung";
 import AdminDanhMuc from "../pages/admin/danhmuc";
 import CenterAdmin from "../pages/admin/center";
-import AddCenterAdmin from "../pages/admin/addcenter";
 import AdminCertificates from "../pages/admin/certificates";
 import AdminReminders from "../pages/admin/reminders";
 
@@ -88,7 +87,7 @@ const adminRoutes = [
     {path: "/admin/user", component: userAdmin, layout: layoutAdmin},
     { path: "/admin/danhmuc", component: AdminDanhMuc, layout: layoutAdmin },
     { path: "/admin/center", component: CenterAdmin, layout: layoutAdmin },
-    { path: "/admin/add-center", component: AddCenterAdmin, layout: layoutAdmin },
+    // /admin/add-center đã bỏ — chức năng add/edit gộp vào modal trong /admin/center
     {
         path: "/admin/lich-tiem-chung",
         component: lichTiemChungAdmin,

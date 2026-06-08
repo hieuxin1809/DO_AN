@@ -1,10 +1,18 @@
 package com.web.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.web.entity.Vaccine;
-import com.web.entity.VaccineSchedule;
+import com.web.entity.*;
+import com.web.enums.StatusCustomerSchedule;
+import com.web.repository.AgeGroupRepository;
+import com.web.repository.CenterRepository;
+import com.web.repository.CustomerProfileRepository;
+import com.web.repository.CustomerScheduleRepository;
+import com.web.repository.VaccinationCertificateRepository;
 import com.web.repository.VaccineRepository;
 import com.web.repository.VaccineScheduleRepository;
+import com.web.repository.VaccineScheduleTimeRepository;
+import com.web.repository.VaccineTypeRepository;
+import com.web.utils.UserUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +48,14 @@ public class GroqService {
 
     @Autowired private VaccineScheduleRepository vaccineScheduleRepo;
     @Autowired private VaccineRepository vaccineRepo;
+    @Autowired private CenterRepository centerRepo;
+    @Autowired private VaccineTypeRepository vaccineTypeRepo;
+    @Autowired private AgeGroupRepository ageGroupRepo;
+    @Autowired private VaccineScheduleTimeRepository vaccineScheduleTimeRepo;
+    @Autowired private CustomerScheduleRepository customerScheduleRepo;
+    @Autowired private CustomerProfileRepository customerProfileRepo;
+    @Autowired private VaccinationCertificateRepository certRepo;
+    @Autowired private UserUtils userUtils;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     /** Lịch sử hội thoại theo session — in-memory, không persist. */
@@ -55,7 +71,10 @@ public class GroqService {
         "=== QUY TẮC DÙNG TOOL ===\n" +
         "Khi user hỏi về DỮ LIỆU HIỆN CÓ TRONG HỆ THỐNG (lịch tiêm sắp tới, danh sách vaccine, giá, ...), " +
         "BẮT BUỘC dùng tool tương ứng để query data live. TUYỆT ĐỐI KHÔNG bịa data.\n" +
-        "Nếu user hỏi câu kiến thức chung (vaccine gì phòng bệnh gì, tác dụng phụ, độ tuổi tiêm chuẩn) → trả lời thẳng bằng kiến thức bên dưới.\n\n" +
+        "Nếu user hỏi câu kiến thức chung (vaccine gì phòng bệnh gì, tác dụng phụ, độ tuổi tiêm chuẩn) → trả lời thẳng bằng kiến thức bên dưới.\n" +
+        "Khi user nói 'tôi', 'của tôi', 'lịch tôi đã đặt', 'mũi đã tiêm của tôi', 'giấy của tôi' " +
+        "→ DÙNG các tool 'getMy*' để query data của user đang đăng nhập.\n" +
+        "Nếu tool trả về 'requireLogin=true' → bảo user vui lòng đăng nhập trước (link /dang-nhap).\n\n" +
 
         // ── QUY TẮC QUAN TRỌNG ──────────────────────────────────────────────
         "=== QUY TẮC BẮT BUỘC ===\n" +
@@ -222,6 +241,106 @@ public class GroqService {
             )
         ));
 
+        /* ════════════ PHASE 2 — 5 tool nhóm A (public, không cần đăng nhập) ════════════ */
+
+        /* ─── Tool 3: chi tiết 1 vaccine ─── */
+        tools.add(tool(
+            "getVaccineDetails",
+            "Lấy thông tin CHI TIẾT của 1 vaccine cụ thể: mô tả, nhà sản xuất, loại, độ tuổi, " +
+            "số mũi tối đa, khoảng cách giữa các mũi, tồn kho, hạn sử dụng. " +
+            "Dùng khi user muốn hiểu sâu về 1 vaccine: 'vaccine X tiêm mấy mũi?', " +
+            "'khoảng cách giữa 2 mũi vaccine Y là bao lâu?', 'vaccine Z phù hợp độ tuổi nào?'.",
+            paramObj(
+                paramStr("vaccineName", "Tên vaccine (có thể chỉ một phần). VD: 'sởi', 'HPV', '6in1'.")
+            )
+        ));
+
+        /* ─── Tool 4: tìm trung tâm tiêm ─── */
+        tools.add(tool(
+            "findCenters",
+            "Tìm các trung tâm tiêm chủng trong hệ thống iVaccine theo tên hoặc địa chỉ. " +
+            "Dùng khi user hỏi: 'có trung tâm nào ở Hà Nội?', 'trung tâm X ở đâu?', " +
+            "'có chi nhánh nào gần Cầu Giấy không?'.",
+            paramObj(
+                paramStr("keyword", "Từ khóa tên trung tâm (có thể chỉ một phần). Bỏ trống nếu không có."),
+                paramStr("city",     "Thành phố lọc. VD: 'Hà Nội', 'TP.HCM'. Bỏ trống nếu không có."),
+                paramStr("district", "Quận/huyện. VD: 'Cầu Giấy'. Bỏ trống nếu không có.")
+            )
+        ));
+
+        /* ─── Tool 5: số slot còn trống ─── */
+        tools.add(tool(
+            "checkSlotsRemaining",
+            "Kiểm tra số chỗ trống còn lại của 1 khung giờ tiêm (vaccine schedule time). " +
+            "Dùng khi user hỏi: 'lịch tiêm ngày X còn chỗ không?', 'còn slot trống ca sáng không?'. " +
+            "Tham số scheduleTimeId lấy từ kết quả listUpcomingSchedules.",
+            paramObj(
+                paramStr("scheduleTimeId", "ID của VaccineScheduleTime (kết quả từ tool khác).")
+            )
+        ));
+
+        /* ─── Tool 6: vaccine phù hợp độ tuổi ─── */
+        tools.add(tool(
+            "getVaccinesForAge",
+            "Liệt kê các vaccine PHÙ HỢP với một độ tuổi cụ thể. " +
+            "Dùng khi user hỏi: 'con tôi 3 tháng nên tiêm vaccine gì?', 'người lớn 30 tuổi tiêm gì?', " +
+            "'trẻ 12 tuổi tiêm HPV được không?'.",
+            paramObj(
+                paramStr("age",     "Số tuổi/tháng. VD: '6', '12', '30'."),
+                paramStr("ageUnit", "'month' nếu là tháng tuổi, 'year' nếu là năm tuổi. Mặc định 'year'.")
+            )
+        ));
+
+        /* ─── Tool 7: liệt kê loại vaccine ─── */
+        tools.add(tool(
+            "listVaccineTypes",
+            "Liệt kê tất cả các LOẠI VACCINE trong hệ thống (vd: vaccine sống giảm độc lực, vaccine bất hoạt, mRNA, ...). " +
+            "Dùng khi user hỏi: 'có những loại vaccine nào?', 'phân loại vaccine ra sao?'.",
+            paramObj()
+        ));
+
+        /* ════════════ PHASE 3 — 4 tool user-specific (yêu cầu đăng nhập) ════════════ */
+
+        /* ─── Tool 8: lịch tiêm sắp tới CỦA TÔI ─── */
+        tools.add(tool(
+            "getMyUpcomingAppointments",
+            "Lấy danh sách LỊCH TIÊM SẮP TỚI của user ĐANG ĐĂNG NHẬP. " +
+            "BẮT BUỘC dùng khi user hỏi: 'lịch tiêm sắp tới của tôi', 'tôi có hẹn tiêm khi nào', " +
+            "'lịch tôi đã đặt còn không?'. " +
+            "Trả về các lịch có status=pending|confirmed và injectDate >= hôm nay.",
+            paramObj()
+        ));
+
+        /* ─── Tool 9: lịch sử tiêm CỦA TÔI ─── */
+        tools.add(tool(
+            "getMyVaccinationHistory",
+            "Lấy LỊCH SỬ TIÊM (đã hoàn tất) của user ĐANG ĐĂNG NHẬP. " +
+            "BẮT BUỘC dùng khi user hỏi: 'tôi đã tiêm những vaccine gì', 'lịch sử tiêm của tôi', " +
+            "'tôi tiêm mũi X bao giờ rồi?'. " +
+            "Trả về các mũi đã inject/finished, sắp xếp mới nhất trước.",
+            paramObj()
+        ));
+
+        /* ─── Tool 10: gợi ý mũi tiếp theo CỦA TÔI ─── */
+        tools.add(tool(
+            "getMyRecommendedNext",
+            "Gợi ý các MŨI TIÊM TIẾP THEO cho user ĐANG ĐĂNG NHẬP dựa vào: tuổi (profile.birthdate), " +
+            "vaccine đã tiêm, maxDose từng vaccine. Trả về các vaccine: " +
+            "(a) đã tiêm 1 mũi nhưng chưa đủ maxDose → gợi ý mũi tiếp; " +
+            "(b) chưa tiêm + phù hợp độ tuổi. " +
+            "Dùng khi user hỏi: 'tôi nên tiêm gì tiếp theo?', 'còn vaccine nào tôi nên tiêm không?'.",
+            paramObj()
+        ));
+
+        /* ─── Tool 11: giấy chứng nhận CỦA TÔI ─── */
+        tools.add(tool(
+            "getMyCertificates",
+            "Lấy danh sách GIẤY CHỨNG NHẬN TIÊM CHỦNG của user ĐANG ĐĂNG NHẬP. " +
+            "Dùng khi user hỏi: 'giấy chứng nhận của tôi', 'tôi có những giấy gì rồi?', " +
+            "'tôi tải giấy ở đâu?'. Trả về serial, vaccine, ngày cấp, status revoked.",
+            paramObj()
+        ));
+
         return tools;
     }
 
@@ -231,8 +350,19 @@ public class GroqService {
     private Object executeTool(String name, Map<String, Object> args) {
         try {
             switch (name) {
-                case "listUpcomingSchedules": return tool_listUpcomingSchedules(args);
-                case "searchVaccines":        return tool_searchVaccines(args);
+                case "listUpcomingSchedules":     return tool_listUpcomingSchedules(args);
+                case "searchVaccines":            return tool_searchVaccines(args);
+                /* ── Phase 2 — public tools ── */
+                case "getVaccineDetails":         return tool_getVaccineDetails(args);
+                case "findCenters":               return tool_findCenters(args);
+                case "checkSlotsRemaining":       return tool_checkSlotsRemaining(args);
+                case "getVaccinesForAge":         return tool_getVaccinesForAge(args);
+                case "listVaccineTypes":          return tool_listVaccineTypes(args);
+                /* ── Phase 3 — user-specific tools ── */
+                case "getMyUpcomingAppointments": return tool_getMyUpcomingAppointments(args);
+                case "getMyVaccinationHistory":   return tool_getMyVaccinationHistory(args);
+                case "getMyRecommendedNext":      return tool_getMyRecommendedNext(args);
+                case "getMyCertificates":         return tool_getMyCertificates(args);
                 default:
                     return Map.of("error", "Tool '" + name + "' không tồn tại");
             }
@@ -315,6 +445,484 @@ public class GroqService {
             result.put("message", "Không tìm thấy vaccine nào phù hợp.");
         }
         return result;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PHASE 2 — PUBLIC TOOLS (không cần đăng nhập)
+       ═══════════════════════════════════════════════════════════════════ */
+
+    /** Tool 3: chi tiết 1 vaccine cụ thể */
+    private Object tool_getVaccineDetails(Map<String, Object> args) {
+        String name = strArg(args, "vaccineName");
+        if (name == null || name.isBlank()) {
+            return Map.of("error", "Vui lòng cung cấp tên vaccine.");
+        }
+        var page = vaccineRepo.findByParam("%" + name + "%", PageRequest.of(0, 5));
+        if (page.isEmpty()) {
+            return Map.of("totalFound", 0, "message", "Không tìm thấy vaccine '" + name + "'.");
+        }
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+        for (Vaccine v : page.getContent()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", v.getId());
+            item.put("name", v.getName());
+            item.put("description", v.getDescription());
+            item.put("price", v.getPrice());
+            item.put("manufacturer",  v.getManufacturer() != null ? v.getManufacturer().getName() : null);
+            item.put("vaccineType",   v.getVaccineType()  != null ? v.getVaccineType().getTypeName() : null);
+            item.put("ageRange",      v.getAgeGroup()     != null ? v.getAgeGroup().getAgeRange() : null);
+            item.put("maxDose", v.getMaxDose());
+            item.put("minIntervalMonths", v.getMinIntervalMonths());
+            item.put("inventory", v.getInventory());
+            if (v.getExpirationDate() != null) {
+                LocalDate exp = v.getExpirationDate().toLocalDateTime().toLocalDate();
+                item.put("expirationDate", exp.toString());
+                item.put("expired", exp.isBefore(today));
+            }
+            item.put("status", "ACTIVE".equalsIgnoreCase(v.getStatus()) ? "Đang kinh doanh" : "Ngừng kinh doanh");
+            out.add(item);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalFound", out.size());
+        result.put("vaccines", out);
+        return result;
+    }
+
+    /** Tool 4: tìm trung tâm theo tên/city/district */
+    private Object tool_findCenters(Map<String, Object> args) {
+        String keyword  = strArg(args, "keyword");
+        String city     = strArg(args, "city");
+        String district = strArg(args, "district");
+
+        // Lấy hết rồi filter trong Java vì repo Center hiện không có advanced search
+        List<Center> all = centerRepo.findAll();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Center c : all) {
+            if (keyword != null && (c.getCenterName() == null
+                    || !c.getCenterName().toLowerCase().contains(keyword.toLowerCase()))) continue;
+            if (city != null && (c.getCity() == null
+                    || !c.getCity().toLowerCase().contains(city.toLowerCase()))) continue;
+            if (district != null && (c.getDistrict() == null
+                    || !c.getDistrict().toLowerCase().contains(district.toLowerCase()))) continue;
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", c.getId());
+            item.put("centerName", c.getCenterName());
+            item.put("city", c.getCity());
+            item.put("district", c.getDistrict());
+            item.put("ward", c.getWard());
+            item.put("street", c.getStreet());
+            item.put("fullAddress", joinNonEmpty(", ", c.getStreet(), c.getWard(), c.getDistrict(), c.getCity()));
+            out.add(item);
+            if (out.size() >= 30) break;
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalFound", out.size());
+        result.put("centers", out);
+        if (out.isEmpty()) result.put("message", "Không tìm thấy trung tâm phù hợp.");
+        return result;
+    }
+
+    /** Tool 5: số slot còn trống của 1 VaccineScheduleTime */
+    private Object tool_checkSlotsRemaining(Map<String, Object> args) {
+        String idStr = strArg(args, "scheduleTimeId");
+        if (idStr == null) return Map.of("error", "Thiếu scheduleTimeId.");
+        Long stId;
+        try { stId = Long.parseLong(idStr); }
+        catch (Exception e) { return Map.of("error", "scheduleTimeId phải là số."); }
+
+        var opt = vaccineScheduleTimeRepo.findById(stId);
+        if (opt.isEmpty()) return Map.of("error", "Không tìm thấy khung giờ #" + stId);
+        VaccineScheduleTime st = opt.get();
+
+        long registered = customerScheduleRepo.countByVaccineScheduleTimeId(stId);
+        int limit = st.getLimitPeople() == null ? 0 : st.getLimitPeople();
+        long remaining = Math.max(0, limit - registered);
+
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("scheduleTimeId", stId);
+        r.put("injectDate", st.getInjectDate() != null ? st.getInjectDate().toString() : null);
+        r.put("start", st.getStart() != null ? st.getStart().toString() : null);
+        r.put("end",   st.getEnd()   != null ? st.getEnd().toString()   : null);
+        r.put("limit", limit);
+        r.put("registered", registered);
+        r.put("remaining", remaining);
+        r.put("full", remaining == 0);
+        if (st.getVaccineSchedule() != null) {
+            VaccineSchedule vs = st.getVaccineSchedule();
+            r.put("vaccineName", vs.getVaccine() != null ? vs.getVaccine().getName() : null);
+            r.put("centerName",  vs.getCenter()  != null ? vs.getCenter().getCenterName() : null);
+        }
+        return r;
+    }
+
+    /** Tool 6: vaccine phù hợp độ tuổi */
+    private Object tool_getVaccinesForAge(Map<String, Object> args) {
+        String ageStr = strArg(args, "age");
+        String unit   = strArg(args, "ageUnit");
+        if (ageStr == null) return Map.of("error", "Vui lòng cung cấp tuổi.");
+
+        int age;
+        try { age = Integer.parseInt(ageStr.trim()); }
+        catch (Exception e) { return Map.of("error", "Tuổi phải là số nguyên."); }
+
+        // Quy đổi về tháng cho dễ so sánh
+        boolean isMonth = unit != null && unit.toLowerCase().startsWith("month");
+        int ageMonths = isMonth ? age : age * 12;
+
+        // Duyệt vaccine, parse ageRange, check match
+        List<Vaccine> all = vaccineRepo.findAll();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Vaccine v : all) {
+            if (v.getAgeGroup() == null || v.getAgeGroup().getAgeRange() == null) continue;
+            if (!"ACTIVE".equalsIgnoreCase(v.getStatus())) continue;
+            int[] range = parseAgeRangeToMonths(v.getAgeGroup().getAgeRange());
+            if (range == null) continue;
+            if (ageMonths >= range[0] && ageMonths <= range[1]) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", v.getId());
+                item.put("name", v.getName());
+                item.put("ageRange", v.getAgeGroup().getAgeRange());
+                item.put("manufacturer", v.getManufacturer() != null ? v.getManufacturer().getName() : null);
+                item.put("price", v.getPrice());
+                item.put("maxDose", v.getMaxDose());
+                out.add(item);
+            }
+        }
+
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("queryAge",      age);
+        r.put("queryAgeUnit",  isMonth ? "month" : "year");
+        r.put("queryAgeMonths", ageMonths);
+        r.put("totalFound",    out.size());
+        r.put("vaccines",      out);
+        if (out.isEmpty()) {
+            r.put("message", "Không tìm thấy vaccine phù hợp với độ tuổi " + age + (isMonth ? " tháng" : " tuổi") + ".");
+        }
+        return r;
+    }
+
+    /** Tool 7: liệt kê loại vaccine */
+    private Object tool_listVaccineTypes(Map<String, Object> args) {
+        List<VaccineType> types = vaccineTypeRepo.findAll();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (VaccineType t : types) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", t.getId());
+            item.put("typeName", t.getTypeName());
+            item.put("description", t.getDescription());
+            out.add(item);
+        }
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("totalFound", out.size());
+        r.put("types", out);
+        return r;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PHASE 3 — USER-SPECIFIC TOOLS (yêu cầu đăng nhập)
+       Lấy user hiện tại qua UserUtils (đọc SecurityContext do JWT filter set).
+       Nếu chưa đăng nhập → trả {requireLogin:true} để AI bảo user login.
+       ═══════════════════════════════════════════════════════════════════ */
+
+    private User currentUserOrNull() {
+        try { return userUtils.getUserWithAuthority(); }
+        catch (Exception e) { return null; }
+    }
+
+    private Object requireLoginResponse() {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("requireLogin", true);
+        r.put("message", "Bạn cần đăng nhập để xem thông tin cá nhân. Vui lòng vào /dang-nhap.");
+        return r;
+    }
+
+    /** Tool 8: lịch tiêm sắp tới của user đang login */
+    private Object tool_getMyUpcomingAppointments(Map<String, Object> args) {
+        User me = currentUserOrNull();
+        if (me == null) return requireLoginResponse();
+
+        LocalDate today = LocalDate.now();
+        java.sql.Date sqlToday = java.sql.Date.valueOf(today);
+        List<CustomerSchedule> all = customerScheduleRepo.findAllByUserId(me.getId());
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (CustomerSchedule cs : all) {
+            try {
+                if (cs.getVaccineScheduleTime() == null) continue;
+                java.sql.Date inject = cs.getVaccineScheduleTime().getInjectDate();
+                if (inject == null) continue;
+                // Bỏ lịch đã qua
+                if (inject.before(sqlToday)) continue;
+                // Chỉ lịch active (chưa hủy / chưa tiêm / chưa hoàn thành)
+                StatusCustomerSchedule s = cs.getStatusCustomerSchedule();
+                if (s == StatusCustomerSchedule.cancelled
+                        || s == StatusCustomerSchedule.injected
+                        || s == StatusCustomerSchedule.finished
+                        || s == StatusCustomerSchedule.not_injected) continue;
+
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", cs.getId());
+                item.put("injectDate", inject.toString());
+                item.put("start", cs.getVaccineScheduleTime().getStart() != null ? cs.getVaccineScheduleTime().getStart().toString() : null);
+                item.put("end",   cs.getVaccineScheduleTime().getEnd()   != null ? cs.getVaccineScheduleTime().getEnd().toString()   : null);
+                VaccineSchedule vs = cs.getVaccineScheduleTime().getVaccineSchedule();
+                if (vs != null) {
+                    item.put("vaccineName", vs.getVaccine() != null ? vs.getVaccine().getName() : null);
+                    item.put("centerName",  vs.getCenter()  != null ? vs.getCenter().getCenterName() : null);
+                }
+                item.put("status", s != null ? s.name() : null);
+                item.put("payStatus", cs.getCustomerSchedulePay() != null ? cs.getCustomerSchedulePay().name() : null);
+                item.put("fullName", cs.getFullName());
+                out.add(item);
+            } catch (Exception ignore) {}
+        }
+        // Sort theo injectDate ASC
+        out.sort(Comparator.comparing(m -> String.valueOf(m.get("injectDate"))));
+
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("totalFound", out.size());
+        r.put("appointments", out);
+        if (out.isEmpty()) r.put("message", "Bạn không có lịch tiêm sắp tới nào.");
+        return r;
+    }
+
+    /** Tool 9: lịch sử tiêm của user */
+    private Object tool_getMyVaccinationHistory(Map<String, Object> args) {
+        User me = currentUserOrNull();
+        if (me == null) return requireLoginResponse();
+
+        List<CustomerSchedule> all = customerScheduleRepo.findAllByUserId(me.getId());
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (CustomerSchedule cs : all) {
+            try {
+                StatusCustomerSchedule s = cs.getStatusCustomerSchedule();
+                if (s != StatusCustomerSchedule.injected && s != StatusCustomerSchedule.finished) continue;
+
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", cs.getId());
+                item.put("injectDate", cs.getVaccineScheduleTime() != null && cs.getVaccineScheduleTime().getInjectDate() != null
+                        ? cs.getVaccineScheduleTime().getInjectDate().toString() : null);
+                item.put("completedDate", cs.getCompletedDate() != null ? cs.getCompletedDate().toString() : null);
+                VaccineSchedule vs = cs.getVaccineScheduleTime() != null ? cs.getVaccineScheduleTime().getVaccineSchedule() : null;
+                if (vs != null) {
+                    item.put("vaccineName", vs.getVaccine() != null ? vs.getVaccine().getName() : null);
+                    item.put("centerName",  vs.getCenter()  != null ? vs.getCenter().getCenterName() : null);
+                }
+                item.put("status", s.name());
+                item.put("fullName", cs.getFullName());
+                out.add(item);
+            } catch (Exception ignore) {}
+        }
+        // Sort mới nhất trước
+        out.sort((a, b) -> {
+            String da = String.valueOf(a.get("injectDate"));
+            String db = String.valueOf(b.get("injectDate"));
+            return db.compareTo(da);
+        });
+
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("totalFound", out.size());
+        r.put("history", out);
+        if (out.isEmpty()) r.put("message", "Bạn chưa có lịch sử tiêm nào trong hệ thống.");
+        return r;
+    }
+
+    /** Tool 10: gợi ý mũi tiếp theo cho user (dựa vào tuổi + maxDose) */
+    private Object tool_getMyRecommendedNext(Map<String, Object> args) {
+        User me = currentUserOrNull();
+        if (me == null) return requireLoginResponse();
+
+        CustomerProfile profile = null;
+        try { profile = customerProfileRepo.findByUser(me.getId()); }
+        catch (Exception ignore) {}
+
+        Integer ageMonths = null;
+        if (profile != null && profile.getBirthdate() != null) {
+            LocalDate dob = profile.getBirthdate().toLocalDate();
+            ageMonths = (int) java.time.temporal.ChronoUnit.MONTHS.between(dob, LocalDate.now());
+        }
+
+        // Tính số mũi đã tiêm theo từng vaccine
+        Map<Long, Integer> dosesByVaccine = new HashMap<>();
+        Map<Long, String>  vaccineNames   = new HashMap<>();
+        List<CustomerSchedule> myAll = customerScheduleRepo.findAllByUserId(me.getId());
+        for (CustomerSchedule cs : myAll) {
+            StatusCustomerSchedule s = cs.getStatusCustomerSchedule();
+            if (s != StatusCustomerSchedule.injected && s != StatusCustomerSchedule.finished) continue;
+            try {
+                Vaccine v = cs.getVaccineScheduleTime().getVaccineSchedule().getVaccine();
+                if (v == null) continue;
+                dosesByVaccine.merge(v.getId(), 1, Integer::sum);
+                vaccineNames.putIfAbsent(v.getId(), v.getName());
+            } catch (Exception ignore) {}
+        }
+
+        List<Map<String, Object>> recommended = new ArrayList<>();
+
+        // (a) Vaccine đã tiêm nhưng chưa đủ maxDose
+        for (Map.Entry<Long, Integer> e : dosesByVaccine.entrySet()) {
+            try {
+                Vaccine v = vaccineRepo.findById(e.getKey()).orElse(null);
+                if (v == null || v.getMaxDose() == null) continue;
+                int done = e.getValue();
+                if (done < v.getMaxDose()) {
+                    Map<String, Object> r = new LinkedHashMap<>();
+                    r.put("vaccineId", v.getId());
+                    r.put("vaccineName", v.getName());
+                    r.put("dosesCompleted", done);
+                    r.put("maxDose", v.getMaxDose());
+                    r.put("dosesRemaining", v.getMaxDose() - done);
+                    r.put("minIntervalMonths", v.getMinIntervalMonths());
+                    r.put("reason", "Đã tiêm " + done + "/" + v.getMaxDose() + " mũi, cần tiêm tiếp.");
+                    r.put("priority", "high");
+                    recommended.add(r);
+                }
+            } catch (Exception ignore) {}
+        }
+
+        // (b) Vaccine chưa tiêm + phù hợp tuổi
+        if (ageMonths != null) {
+            for (Vaccine v : vaccineRepo.findAll()) {
+                if (!"ACTIVE".equalsIgnoreCase(v.getStatus())) continue;
+                if (dosesByVaccine.containsKey(v.getId())) continue;        // đã tiêm rồi → bỏ
+                if (v.getAgeGroup() == null || v.getAgeGroup().getAgeRange() == null) continue;
+                int[] range = parseAgeRangeToMonths(v.getAgeGroup().getAgeRange());
+                if (range == null) continue;
+                if (ageMonths >= range[0] && ageMonths <= range[1]) {
+                    Map<String, Object> r = new LinkedHashMap<>();
+                    r.put("vaccineId", v.getId());
+                    r.put("vaccineName", v.getName());
+                    r.put("ageRange", v.getAgeGroup().getAgeRange());
+                    r.put("maxDose", v.getMaxDose());
+                    r.put("reason", "Phù hợp độ tuổi và bạn chưa tiêm.");
+                    r.put("priority", "normal");
+                    recommended.add(r);
+                    if (recommended.size() >= 20) break;
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ageMonths", ageMonths);
+        result.put("hasProfile", profile != null);
+        result.put("totalRecommended", recommended.size());
+        result.put("recommendations", recommended);
+        if (ageMonths == null) {
+            result.put("note", "Chưa có ngày sinh trong profile — chỉ gợi ý dựa theo lịch sử tiêm. Cập nhật profile tại /thong-tin-ca-nhan để gợi ý chính xác hơn.");
+        }
+        if (recommended.isEmpty()) {
+            result.put("message", "Hiện chưa có gợi ý nào nổi bật. Bạn có thể vào /dang-ky-tiem-chung để xem toàn bộ vaccine.");
+        }
+        return result;
+    }
+
+    /** Tool 11: giấy chứng nhận của user */
+    private Object tool_getMyCertificates(Map<String, Object> args) {
+        User me = currentUserOrNull();
+        if (me == null) return requireLoginResponse();
+
+        // Cert tìm qua customer_schedule_id thuộc user
+        List<CustomerSchedule> myAll = customerScheduleRepo.findAllByUserId(me.getId());
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (CustomerSchedule cs : myAll) {
+            try {
+                var certOpt = certRepo.findByCustomerScheduleId(cs.getId());
+                if (certOpt.isEmpty()) continue;
+                VaccinationCertificate cert = certOpt.get();
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", cert.getId());
+                item.put("serialNo", cert.getSerialNo());
+                item.put("vaccineName", cert.getVaccineName());
+                item.put("doseNumber", cert.getDoseNumber());
+                item.put("totalDoses", cert.getTotalDoses());
+                item.put("centerName", cert.getCenterName());
+                item.put("injectionDate", cert.getInjectionDate() != null ? cert.getInjectionDate().toString() : null);
+                item.put("issuedDate",    cert.getIssuedDate()    != null ? cert.getIssuedDate().toString()    : null);
+                item.put("revoked", Boolean.TRUE.equals(cert.getRevoked()));
+                if (Boolean.TRUE.equals(cert.getRevoked())) {
+                    item.put("revokedReason", cert.getRevokedReason());
+                }
+                item.put("downloadHint", "Vào /lich-da-dang-ky → mục có 'Tải PDF'.");
+                out.add(item);
+            } catch (Exception ignore) {}
+        }
+        // Sort theo issuedDate desc
+        out.sort((a, b) -> String.valueOf(b.get("issuedDate")).compareTo(String.valueOf(a.get("issuedDate"))));
+
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("totalFound", out.size());
+        r.put("certificates", out);
+        if (out.isEmpty()) r.put("message", "Bạn chưa có giấy chứng nhận nào. Giấy được cấp tự động sau khi tiêm xong.");
+        return r;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       HELPERS riêng cho Phase 2/3
+       ═══════════════════════════════════════════════════════════════════ */
+
+    /**
+     * Parse string ageRange tiếng Việt thành range [min, max] (đơn vị: THÁNG).
+     * Hỗ trợ các format phổ biến:
+     *   "0-1 tháng"           → [0, 1]
+     *   "2-6 tháng"           → [2, 6]
+     *   "9-12 tháng"          → [9, 12]
+     *   "1-6 tuổi"            → [12, 72]
+     *   "9-14 tuổi"           → [108, 168]
+     *   "Người lớn"           → [216, 780]   (18–65 tuổi)
+     *   "≥65 tuổi" / "Trên 65 tuổi" → [780, 1440]
+     * Trả null nếu không parse được.
+     */
+    private int[] parseAgeRangeToMonths(String raw) {
+        if (raw == null) return null;
+        String s = raw.toLowerCase().trim().replace("≥", ">=").replace("≤", "<=");
+        try {
+            // "Người lớn"
+            if (s.contains("người lớn") && !s.matches(".*\\d.*")) return new int[]{216, 780};
+
+            // Pattern "<n>-<m> tháng" hoặc "<n>-<m> tuổi"
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("(\\d+)\\s*[-–]\\s*(\\d+)\\s*(tháng|tuổi|năm)").matcher(s);
+            if (m.find()) {
+                int lo = Integer.parseInt(m.group(1));
+                int hi = Integer.parseInt(m.group(2));
+                String unit = m.group(3);
+                if ("tháng".equals(unit)) return new int[]{lo, hi};
+                return new int[]{lo * 12, hi * 12};
+            }
+
+            // Pattern ">= <n> tuổi" hoặc "trên <n> tuổi"
+            m = java.util.regex.Pattern.compile("(?:>=|trên|từ)\\s*(\\d+)\\s*(tháng|tuổi|năm)").matcher(s);
+            if (m.find()) {
+                int lo = Integer.parseInt(m.group(1));
+                String unit = m.group(2);
+                int loMonths = "tháng".equals(unit) ? lo : lo * 12;
+                return new int[]{loMonths, 1440};   // → 120 tuổi
+            }
+
+            // Pattern "<n> tháng" hoặc "<n> tuổi" (1 con số duy nhất)
+            m = java.util.regex.Pattern.compile("(\\d+)\\s*(tháng|tuổi|năm)").matcher(s);
+            if (m.find()) {
+                int n = Integer.parseInt(m.group(1));
+                String unit = m.group(2);
+                int months = "tháng".equals(unit) ? n : n * 12;
+                return new int[]{months, months};
+            }
+        } catch (Exception ignore) {}
+        return null;
+    }
+
+    private String joinNonEmpty(String sep, String... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p == null || p.trim().isEmpty()) continue;
+            if (sb.length() > 0) sb.append(sep);
+            sb.append(p.trim());
+        }
+        return sb.toString();
     }
 
     /* ═══════════════════════════════════════════════════════════════════

@@ -1,7 +1,5 @@
 import Footer from '../../layout/customer/footer/footer'
-import banner from '../../assest/images/BANNERWEB_6_IN_1_FR_1_1440x490_137ec11ded.webp'
-import banner1 from '../../assest/images/Vacxin_Cum_thang11_LDP_PC_1440x490_7c1f50d94b.webp'
-import banner2 from '../../assest/images/banner-tchung.jpg'
+// (Banner ảnh đã được thay bằng Lottie animation — xem JSX bên dưới)
 import {getMethod} from '../../services/request'
 import {formatMoney} from '../../services/money'
 import { useState, useEffect } from 'react'
@@ -74,10 +72,10 @@ function Home(){
                     background:'rgba(16,185,129,0.14)', borderRadius:'50%', filter:'blur(50px)',
                 }}/>
 
-                <div style={{ maxWidth:'1200px', margin:'0 auto', padding:'60px 24px 0', position:'relative' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:'48px', flexWrap:'wrap' }}>
+                <div style={{ maxWidth:'1320px', margin:'0 auto', padding:'60px 24px 0', position:'relative' }}>
+                    <div style={{ display:'flex', alignItems:'stretch', gap:'36px', flexWrap:'wrap' }}>
                         {/* left text */}
-                        <div style={{ flex:'1 1 400px', color:'#fff' }}>
+                        <div style={{ flex:'1 1 380px', color:'#fff' }}>
                             <div style={{
                                 display:'inline-flex', alignItems:'center', gap:'8px',
                                 background:'rgba(255,255,255,0.12)', borderRadius:'30px',
@@ -159,23 +157,76 @@ function Home(){
                             </div>
                         </div>
 
-                        {/* right banner slideshow */}
-                        <div style={{ flex:'1 1 340px', borderRadius:'16px', overflow:'hidden', boxShadow:'0 24px 60px rgba(0,0,0,0.35)', minHeight:'280px' }}>
-                            <div id="carouselHero" className="carousel slide" data-bs-ride="carousel">
-                                <div className="carousel-inner">
-                                    {[banner1, banner, banner2].map((src, i) => (
-                                        <div key={i} className={`carousel-item${i===0?' active':''}`}>
-                                            <img src={src} className="d-block w-100"
-                                                style={{ height:'300px', objectFit:'cover' }} alt="banner"/>
-                                        </div>
-                                    ))}
+                        {/* right side — Lottie animation y tế */}
+                        <div style={{
+                            flex:'1.6 1 520px',
+                            position:'relative',
+                            alignSelf:'stretch',
+                            display:'flex',
+                            alignItems:'center',
+                            justifyContent:'center',
+                            minHeight:'480px',
+                        }}>
+                            {/* Glow blobs phía sau cho thêm chiều sâu */}
+                            <div style={{
+                                position:'absolute', top:'15%', left:'15%',
+                                width:'60%', height:'70%',
+                                background:'radial-gradient(circle, rgba(14,165,233,0.35) 0%, transparent 60%)',
+                                filter:'blur(40px)', pointerEvents:'none',
+                            }}/>
+                            <div style={{
+                                position:'absolute', bottom:'10%', right:'10%',
+                                width:'50%', height:'50%',
+                                background:'radial-gradient(circle, rgba(52,211,153,0.25) 0%, transparent 60%)',
+                                filter:'blur(50px)', pointerEvents:'none',
+                            }}/>
+
+                            {/* Lottie player — animation host local trong public/animations/ */}
+                            <lottie-player
+                                src="/animations/hero-vaccine.json"
+                                background="transparent"
+                                speed="1"
+                                style={{ width:'100%', maxWidth:'560px', height:'auto', position:'relative', zIndex:1 }}
+                                loop
+                                autoplay
+                            />
+
+                            {/* Trust pill nổi phía trên animation */}
+                            <div style={{
+                                position:'absolute', top:'24px', right:'24px',
+                                background:'rgba(255,255,255,0.95)', backdropFilter:'blur(10px)',
+                                borderRadius:'14px', padding:'10px 16px',
+                                boxShadow:'0 10px 30px rgba(0,0,0,0.18)',
+                                display:'flex', alignItems:'center', gap:'10px',
+                                fontSize:'13px', color:'#0f172a', fontWeight:'700',
+                                zIndex:2,
+                            }}>
+                                <span style={{ fontSize:'18px' }}>🛡️</span>
+                                <div>
+                                    <div style={{ color:'#10b981', fontSize:'11px' }}>● ĐANG HOẠT ĐỘNG</div>
+                                    <div>An toàn 100%</div>
                                 </div>
-                                <button className="carousel-control-prev" type="button" data-bs-target="#carouselHero" data-bs-slide="prev">
-                                    <span className="carousel-control-prev-icon"/>
-                                </button>
-                                <button className="carousel-control-next" type="button" data-bs-target="#carouselHero" data-bs-slide="next">
-                                    <span className="carousel-control-next-icon"/>
-                                </button>
+                            </div>
+
+                            {/* Stat pill nổi phía dưới animation */}
+                            <div style={{
+                                position:'absolute', bottom:'24px', left:'24px',
+                                background:'rgba(255,255,255,0.95)', backdropFilter:'blur(10px)',
+                                borderRadius:'14px', padding:'12px 18px',
+                                boxShadow:'0 10px 30px rgba(0,0,0,0.18)',
+                                display:'flex', alignItems:'center', gap:'12px',
+                                zIndex:2,
+                            }}>
+                                <div style={{
+                                    width:'42px', height:'42px', borderRadius:'12px',
+                                    background:'linear-gradient(135deg,#0ea5e9,#2A388F)',
+                                    display:'flex', alignItems:'center', justifyContent:'center',
+                                    fontSize:'20px',
+                                }}>💉</div>
+                                <div>
+                                    <div style={{ fontSize:'18px', fontWeight:'800', color:'#0f172a' }}>50.000+</div>
+                                    <div style={{ fontSize:'11px', color:'#64748b' }}>Mũi tiêm an toàn</div>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -104,6 +104,16 @@ public class CustomerScheduleService {
     @Autowired
     private NurseRepository nurseRepository;
 
+    @Autowired
+    private ScheduleChangeHistoryRepository scheduleChangeHistoryRepository;
+
+    /** Số lần đổi lịch tối đa cho 1 customer schedule */
+    private static final int MAX_CHANGE_TIMES = 3;
+    /** Phải đổi lịch trước ngày tiêm ít nhất X giờ */
+    private static final int MIN_HOURS_BEFORE_INJECT = 24;
+    /** Slot hold tối đa X phút trước khi auto-release */
+    public static final int HOLD_MINUTES = 15;
+
     public CustomerSchedule create(CustomerSchedule customerSchedule, String orderId, String requestId) {
         LogUtils.init();
         if (paymentRepository.findByOrderIdAndRequestId(orderId, requestId).isPresent()) {
@@ -459,6 +469,84 @@ public class CustomerScheduleService {
         return result;
     }
 
+    /**
+     * Reserve slot — tạo CustomerSchedule với status=pending_payment.
+     * Slot bị "hold" cho user này, count slot sẽ tính row này (vì query đếm
+     * filter status != cancelled, mà pending_payment != cancelled).
+     * Sau 15 phút nếu chưa pay, cron sẽ tự cancel.
+     */
+    @Transactional
+    public CustomerSchedule createReservation(CustomerSchedule customerSchedule) {
+        User user = userUtils.getUserWithAuthority();
+        if (user == null) throw new MessageException("Vui lòng đăng nhập!");
+        if (customerSchedule.getVaccineScheduleTime() == null
+                || customerSchedule.getVaccineScheduleTime().getId() == null) {
+            throw new MessageException("Thiếu khung giờ tiêm");
+        }
+        VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository
+                .findById(customerSchedule.getVaccineScheduleTime().getId())
+                .orElseThrow(() -> new MessageException("Khung giờ không tồn tại"));
+
+        /* Personalization check — chỉ khi đặt cho chính mình */
+        boolean forOther = Boolean.TRUE.equals(customerSchedule.getBookingForOther());
+        if (!forOther) {
+            Long vaccineId = vaccineScheduleTime.getVaccineSchedule().getVaccine().getId();
+            com.web.dto.VaccinePersonalizationResponse p = vaccinePersonalizationService.checkPersonalization(vaccineId);
+            if (!p.isCanBook()) throw new MessageException(p.getReason());
+        }
+
+        /* Capacity check — count đã bao gồm pending_payment do query filter status != cancelled */
+        long count = customerScheduleRepository.countByVaccineScheduleTimeId(vaccineScheduleTime.getId());
+        int limit = vaccineScheduleTime.getLimitPeople() == null ? 0 : vaccineScheduleTime.getLimitPeople();
+        if (count + 1 > limit) {
+            throw new MessageException("Ca tiêm này đã đủ chỗ — vui lòng chọn khung giờ khác");
+        }
+
+        customerSchedule.setUser(user);
+        customerSchedule.setVaccineScheduleTime(vaccineScheduleTime);
+        customerSchedule.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+        customerSchedule.setStatusCustomerSchedule(StatusCustomerSchedule.pending_payment);
+        customerSchedule.setCustomerSchedulePay(CustomerSchedulePay.CHUA_THANH_TOAN);
+        customerSchedule.setPayStatus(PayStatus.CHUA_THANH_TOAN);
+        return customerScheduleRepository.save(customerSchedule);
+    }
+
+    /** Hủy reservation thủ công (user đóng modal / bấm hủy) */
+    @Transactional
+    public void cancelReservation(Long customerScheduleId) {
+        User user = userUtils.getUserWithAuthority();
+        if (user == null) throw new MessageException("Vui lòng đăng nhập!");
+        CustomerSchedule cs = customerScheduleRepository.findById(customerScheduleId)
+                .orElseThrow(() -> new MessageException("Không tìm thấy lịch"));
+        if (cs.getUser() == null || !cs.getUser().getId().equals(user.getId())) {
+            throw new MessageException("Bạn không có quyền hủy lịch này");
+        }
+        if (cs.getStatusCustomerSchedule() != StatusCustomerSchedule.pending_payment) {
+            throw new MessageException("Chỉ hủy được lịch đang giữ chỗ");
+        }
+        cs.setStatusCustomerSchedule(StatusCustomerSchedule.cancelled);
+        customerScheduleRepository.save(cs);
+    }
+
+    /**
+     * Cron: mỗi 1 phút, find pending_payment quá HOLD_MINUTES → cancelled.
+     * Slot tự "mở" do query count filter cancelled.
+     */
+    @Scheduled(fixedRate = 60_000)
+    @Transactional
+    public void releaseExpiredHolds() {
+        Timestamp cutoff = new Timestamp(System.currentTimeMillis() - HOLD_MINUTES * 60_000L);
+        List<CustomerSchedule> expired = customerScheduleRepository
+                .findExpiredHolds(StatusCustomerSchedule.pending_payment, cutoff);
+        for (CustomerSchedule cs : expired) {
+            cs.setStatusCustomerSchedule(StatusCustomerSchedule.cancelled);
+            customerScheduleRepository.save(cs);
+        }
+        if (!expired.isEmpty()) {
+            System.out.println("[Hold] Auto-released " + expired.size() + " expired reservations");
+        }
+    }
+
     public CustomerSchedule createVnPay(CustomerScheduleVnpay customerScheduleVnpay) {
         if(paymentRepository.findByOrderIdAndRequestId(customerScheduleVnpay.getVnpOrderInfo(),customerScheduleVnpay.getVnpOrderInfo()).isPresent()){
             throw new MessageException("Lịch đặt đã được thanh toán");
@@ -617,6 +705,17 @@ public class CustomerScheduleService {
         if(!customerSchedule.getCustomerSchedulePay().equals(CustomerSchedulePay.CHUA_THANH_TOAN)){
             throw new MessageException("Lịch này đã được thanh toán");
         }
+
+        /* ─── Nếu là reservation (pending_payment): kiểm tra chưa quá 15 phút ─── */
+        if (customerSchedule.getStatusCustomerSchedule() == StatusCustomerSchedule.pending_payment) {
+            long expiresAt = customerSchedule.getCreatedDate().getTime() + HOLD_MINUTES * 60_000L;
+            if (System.currentTimeMillis() > expiresAt) {
+                // Quá hạn → đánh dấu cancelled luôn để cron không phải xử lý
+                customerSchedule.setStatusCustomerSchedule(StatusCustomerSchedule.cancelled);
+                customerScheduleRepository.save(customerSchedule);
+                throw new MessageException("Đã quá thời gian giữ chỗ (15 phút). Vui lòng đặt lại.");
+            }
+        }
         String orderId = null;
         if(paymentRequest.getPayType().equals(PayType.MOMO)){
             LogUtils.init();
@@ -650,6 +749,10 @@ public class CustomerScheduleService {
             throw new MessageException("Không hợp lệ");
         }
         customerSchedule.setPayStatus(PayStatus.DA_THANH_TOAN);
+        // Nếu là reservation (pending_payment), chuyển sang pending để admin duyệt
+        if (customerSchedule.getStatusCustomerSchedule() == StatusCustomerSchedule.pending_payment) {
+            customerSchedule.setStatusCustomerSchedule(StatusCustomerSchedule.pending);
+        }
         customerScheduleRepository.save(customerSchedule);
 
         // Lưu record Payment cho mục đích đối soát + chống thanh toán trùng
@@ -665,37 +768,115 @@ public class CustomerScheduleService {
     }
 
 
+    /**
+     * Đổi slot tiêm cho 1 customer schedule.
+     * Quy tắc:
+     *  1. Chỉ status pending/confirmed mới được đổi
+     *  2. Còn ≥ 24h trước ngày tiêm
+     *  3. Slot mới ≠ slot hiện tại
+     *  4. Slot mới còn capacity (registered < limitPeople)
+     *  5. counterChange < 3 (max 3 lần đổi)
+     *  6. INSERT ScheduleChangeHistory (snapshot slot cũ) → giữ audit
+     *  7. UPDATE FK sang slot mới → slot cũ tự "mở" do query đếm động
+     */
+    @Transactional
     public void change(Long id, Long timeId) {
-        CustomerSchedule customerSchedule = customerScheduleRepository.findById(id).get();
-        VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository.findById(timeId).get();
+        CustomerSchedule customerSchedule = customerScheduleRepository.findById(id)
+                .orElseThrow(() -> new MessageException("Không tìm thấy lịch tiêm"));
+        VaccineScheduleTime newTime = vaccineScheduleTimeRepository.findById(timeId)
+                .orElseThrow(() -> new MessageException("Khung giờ tiêm không tồn tại"));
 
-        // kiểm tra customerSchedule đã đăng ký sau 24 giờ chưa
-        Instant createdDate = customerSchedule.getCreatedDate().toInstant();
-        Instant now = Instant.now();
-
-        if (Duration.between(createdDate, now).toHours() > 24) {
-            throw new MessageException("Đã quá "+Duration.between(createdDate, now).toHours()+"h, không thể đổi được lịch tiêm");
+        VaccineScheduleTime oldTime = customerSchedule.getVaccineScheduleTime();
+        if (oldTime == null) {
+            throw new MessageException("Lịch tiêm chưa có slot ban đầu — không thể đổi");
         }
 
-        customerSchedule.setVaccineScheduleTime(vaccineScheduleTime);
-        if(customerSchedule.getCounterChange() == null){
-            customerSchedule.setCounterChange(0);
+        /* ─── 1. Status check ─── */
+        StatusCustomerSchedule st = customerSchedule.getStatusCustomerSchedule();
+        if (st != StatusCustomerSchedule.pending && st != StatusCustomerSchedule.confirmed) {
+            throw new MessageException("Chỉ đổi được lịch ở trạng thái 'Chờ duyệt' hoặc 'Đã duyệt'");
         }
-        customerSchedule.setCounterChange(customerSchedule.getCounterChange() + 1);
-        if(customerSchedule.getCounterChange() == 4){
-            throw new MessageException("Bạn chỉ được đổi lịch tiêm 3 lần");
+
+        /* ─── 2. Time window check — còn ≥ 24h trước ngày tiêm hiện tại ─── */
+        if (oldTime.getInjectDate() != null) {
+            java.time.LocalDate injectLd = oldTime.getInjectDate().toLocalDate();
+            java.time.LocalDateTime injectAt = injectLd.atTime(
+                    oldTime.getStart() != null ? oldTime.getStart().toLocalTime()
+                                               : java.time.LocalTime.of(0, 0)
+            );
+            long hoursLeft = java.time.Duration.between(java.time.LocalDateTime.now(), injectAt).toHours();
+            if (hoursLeft < MIN_HOURS_BEFORE_INJECT) {
+                throw new MessageException("Chỉ được đổi lịch khi còn ít nhất "
+                        + MIN_HOURS_BEFORE_INJECT + " giờ trước ngày tiêm (hiện còn " + hoursLeft + "h)");
+            }
         }
-        else{
-            User csUser = customerSchedule.getUser();
-            String _htmlChg = EmailTemplateUtils.scheduleChange(
-                    customerSchedule.getFullName() != null ? customerSchedule.getFullName() : csUser.getEmail(),
-                    customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getName(),
-                    vaccineScheduleTime.getInjectDate() != null ? vaccineScheduleTime.getInjectDate().toString() : "N/A",
-                    vaccineScheduleTime.getStart() + " - " + vaccineScheduleTime.getEnd(),
-                    3 - customerSchedule.getCounterChange());
-            mailService.sendEmail(csUser.getEmail(), "[iVaccine] Thay đổi lịch hẹn tiêm chủng", _htmlChg, false, true);
+
+        /* ─── 3. Slot mới ≠ slot cũ ─── */
+        if (oldTime.getId().equals(newTime.getId())) {
+            throw new MessageException("Bạn đang chọn lại đúng slot hiện tại");
         }
+
+        /* ─── 4. Capacity slot mới ─── */
+        long registered = customerScheduleRepository.countByVaccineScheduleTimeId(newTime.getId());
+        int limit = newTime.getLimitPeople() == null ? 0 : newTime.getLimitPeople();
+        if (registered >= limit) {
+            throw new MessageException("Khung giờ này đã đầy (" + registered + "/" + limit + ")");
+        }
+
+        /* ─── 5. Counter check (TRƯỚC khi tăng) ─── */
+        int counter = customerSchedule.getCounterChange() == null ? 0 : customerSchedule.getCounterChange();
+        if (counter >= MAX_CHANGE_TIMES) {
+            throw new MessageException("Bạn đã đổi lịch tối đa " + MAX_CHANGE_TIMES + " lần, không thể đổi tiếp");
+        }
+
+        /* ─── 6. Insert history (snapshot slot cũ → slot mới) ─── */
+        ScheduleChangeHistory history = ScheduleChangeHistory.builder()
+                .customerScheduleId(customerSchedule.getId())
+                .fromTimeId(oldTime.getId())
+                .fromInjectDate(oldTime.getInjectDate())
+                .fromStart(oldTime.getStart())
+                .fromEnd(oldTime.getEnd())
+                .toTimeId(newTime.getId())
+                .toInjectDate(newTime.getInjectDate())
+                .toStart(newTime.getStart())
+                .toEnd(newTime.getEnd())
+                .changedAt(new Timestamp(System.currentTimeMillis()))
+                .changedByUserId(customerSchedule.getUser() != null ? customerSchedule.getUser().getId() : null)
+                .build();
+        scheduleChangeHistoryRepository.save(history);
+
+        /* ─── 7. Update FK + counter ─── */
+        customerSchedule.setVaccineScheduleTime(newTime);
+        customerSchedule.setCounterChange(counter + 1);
         customerScheduleRepository.save(customerSchedule);
+
+        /* ─── 8. Email báo lịch mới ─── */
+        try {
+            User csUser = customerSchedule.getUser();
+            if (csUser != null && csUser.getEmail() != null) {
+                String html = EmailTemplateUtils.scheduleChange(
+                        customerSchedule.getFullName() != null ? customerSchedule.getFullName() : csUser.getEmail(),
+                        newTime.getVaccineSchedule().getVaccine().getName(),
+                        newTime.getInjectDate() != null ? newTime.getInjectDate().toString() : "N/A",
+                        newTime.getStart() + " - " + newTime.getEnd(),
+                        MAX_CHANGE_TIMES - customerSchedule.getCounterChange());
+                mailService.sendEmail(csUser.getEmail(),
+                        "[iVaccine] Thay đổi lịch hẹn tiêm chủng", html, false, true);
+            }
+        } catch (Exception e) {
+            // Không fail transaction nếu email lỗi
+            System.err.println("[change] gửi email thất bại: " + e.getMessage());
+        }
+    }
+
+    /** Lịch sử đổi lịch của 1 customer schedule. */
+    public List<ScheduleChangeHistory> getChangeHistory(Long customerScheduleId) {
+        return scheduleChangeHistoryRepository.findByCustomerScheduleIdOrderByChangedAtDesc(customerScheduleId);
+    }
+
+    /** Tìm customer schedule theo id (Optional) — dùng cho authorization check. */
+    public Optional<CustomerSchedule> findOptionalById(Long id) {
+        return customerScheduleRepository.findById(id);
     }
 
     public CustomerSchedule updateCustomerSchedule(UpdateCustomerSchedule request) {

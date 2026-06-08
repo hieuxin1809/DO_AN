@@ -35,6 +35,33 @@ public class CustomerScheduleApi {
         return new ResponseEntity(result, HttpStatus.CREATED);
     }
 
+    /**
+     * POST /api/customer-schedule/customer/reserve
+     * Giữ slot 15 phút trong khi user thanh toán.
+     * Trả về { customerScheduleId, expiresAt, expiresInSeconds }.
+     */
+    @PostMapping("/customer/reserve")
+    public ResponseEntity<?> reserve(@RequestBody CustomerSchedule customerSchedule) {
+        CustomerSchedule reserved = customerScheduleService.createReservation(customerSchedule);
+        long expiresAtMs = reserved.getCreatedDate().getTime()
+                + com.web.service.CustomerScheduleService.HOLD_MINUTES * 60_000L;
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("customerScheduleId", reserved.getId());
+        body.put("expiresAt", new java.sql.Timestamp(expiresAtMs));
+        body.put("expiresInSeconds", Math.max(0, (expiresAtMs - System.currentTimeMillis()) / 1000L));
+        return new ResponseEntity<>(body, HttpStatus.CREATED);
+    }
+
+    /**
+     * POST /api/customer-schedule/customer/cancel-reservation?id=X
+     * User chủ động hủy reservation (bỏ giữ chỗ).
+     */
+    @PostMapping("/customer/cancel-reservation")
+    public ResponseEntity<?> cancelReservation(@RequestParam Long id) {
+        customerScheduleService.cancelReservation(id);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
     @PostMapping("/customer/create-vnpay")
     public ResponseEntity<?> createVnPay(@RequestBody CustomerScheduleVnpay customerScheduleVnpay) {
         CustomerSchedule result = customerScheduleService.createVnPay(customerScheduleVnpay);
@@ -93,6 +120,30 @@ public class CustomerScheduleApi {
     public ResponseEntity<?> change(@RequestParam Long id, @RequestParam Long timeId) {
         customerScheduleService.change(id, timeId);
         return new ResponseEntity(HttpStatus.OK);
+    }
+
+    /**
+     * GET /api/customer-schedule/customer/change-history/{id}
+     * Lịch sử các lần đổi lịch của 1 customer schedule.
+     * Customer chỉ xem được của chính mình.
+     */
+    @Autowired
+    private com.web.utils.UserUtils userUtils;
+
+    @GetMapping("/customer/change-history/{id}")
+    public ResponseEntity<?> getChangeHistory(@PathVariable Long id) {
+        com.web.entity.User loggedIn = userUtils.getUserWithAuthority();
+        if (loggedIn == null) {
+            throw new com.web.exception.MessageException("Vui lòng đăng nhập!");
+        }
+        var cs = customerScheduleService.findOptionalById(id);
+        if (cs.isEmpty()) {
+            throw new com.web.exception.MessageException("Không tìm thấy lịch tiêm!");
+        }
+        if (cs.get().getUser() == null || !cs.get().getUser().getId().equals(loggedIn.getId())) {
+            throw new com.web.exception.MessageException("Bạn không có quyền xem lịch sử này!");
+        }
+        return new ResponseEntity<>(customerScheduleService.getChangeHistory(id), HttpStatus.OK);
     }
 
     @PostMapping("/customer/create-customer-findById-schedule")

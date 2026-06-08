@@ -29,7 +29,12 @@ public interface UserRepository extends JpaRepository<User,Long> {
     @Query(value = "select u from User u where u.activationKey = ?1 and u.email = ?2")
     Optional<User> getUserByActivationKeyAndEmail(String key, String email);
 
-    @Query("select u from User u where u.authorities.name = ?1")
+    @Query("""
+    select u
+    from User u
+    where u.authorities.name = ?1
+    order by u.createdDate desc
+""")
     List<User> getUserByRole(String role);
 
     @Query("SELECT u FROM User u WHERE u.authorities.id = :authorityId")

@@ -86,11 +86,14 @@ const AIChatbot = () => {
         setIsLoading(true);
 
         try {
+            // Gửi kèm JWT (nếu user đã đăng nhập) để các tool "getMy*" lấy được userId
+            const tok = localStorage.getItem('token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (tok) headers['Authorization'] = `Bearer ${tok}`;
+
             const response = await fetch('http://localhost:8080/api/chat-ai/ask', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers,
                 body: JSON.stringify({ message: userMsg, sessionId: getSessionId() })
             });
 

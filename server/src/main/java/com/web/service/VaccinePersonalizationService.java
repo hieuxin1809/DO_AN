@@ -153,8 +153,9 @@ public class VaccinePersonalizationService {
         LocalDate today = LocalDate.now();
 
         // Lấy tất cả lịch tiêm có ngày tiêm đúng hôm nay để gửi nhắc
+        // Entity injectDate là java.sql.Date → convert tránh type mismatch
         List<CustomerSchedule> upcomingSchedules = customerScheduleRepository
-                .findByInjectDate(today);
+                .findByInjectDate(java.sql.Date.valueOf(today));
 
         for (CustomerSchedule schedule : upcomingSchedules) {
             try {

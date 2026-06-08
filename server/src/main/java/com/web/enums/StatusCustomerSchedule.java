@@ -7,6 +7,9 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum StatusCustomerSchedule {
 
+    /** User đã chọn slot nhưng chưa thanh toán xong. Slot bị "hold" tối đa 15 phút,
+     *  sau đó cron tự cancel để mở slot cho người khác. */
+    pending_payment,
     pending,
     confirmed,
     cancelled,

@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faUserPlus, faEdit, faTrash, faLock, faUnlockAlt,
-  faSearch, faUsers, faX, faChevronDown, faUserMd, faUserNurse, faUser, faCamera,
+  faSearch, faUsers, faX, faChevronDown, faUserMd, faUser, faCamera,
 } from '@fortawesome/free-solid-svg-icons';
 import { uploadSingleFile } from '../../services/request';
 
@@ -24,13 +24,11 @@ const token = () => localStorage.getItem('token');
 const authFetch = (url, opts = {}) =>
   fetch(BASE + url, { ...opts, headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json', ...(opts.headers || {}) } });
 
-/* ── role config ── */
+/* ── role config (chỉ còn 3 role active: Admin / Doctor / Customer) ── */
 const ROLE_MAP = {
   Admin:          { label: 'Quản trị viên', color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
   Doctor:         { label: 'Bác sĩ',        color: ACCENT,    bg: 'rgba(14,165,233,0.1)'  },
-  Nurse:          { label: 'Y tá',           color: SUCCESS,   bg: 'rgba(16,185,129,0.1)'  },
   Customer:       { label: 'Khách hàng',     color: WARNING,   bg: 'rgba(245,158,11,0.1)'  },
-  'Support Staff':{ label: 'Nhân viên HT',   color: '#06b6d4', bg: 'rgba(6,182,212,0.1)'   },
 };
 const ALL_ROLES = Object.keys(ROLE_MAP);
 
@@ -186,7 +184,7 @@ const AdminUser = () => {
   }, []);
 
   /* modal state — phân biệt theo role đang tạo */
-  const [createRole, setCreateRole]   = useState(null);   // 'Customer' | 'Doctor' | 'Nurse' | null
+  const [createRole, setCreateRole]   = useState(null);   // 'Customer' | 'Doctor' | null
   const [form,       setForm]         = useState({});
   const [errors,     setErrors]       = useState({});
   const [saving,     setSaving]       = useState(false);
@@ -241,7 +239,7 @@ const AdminUser = () => {
     else if (form.password.length < 6) e.password = 'Mật khẩu tối thiểu 6 ký tự';
     if (form.password !== form.repassword) e.repassword = 'Mật khẩu không khớp';
 
-    if (createRole === 'Doctor' || createRole === 'Nurse') {
+    if (createRole === 'Doctor') {
       if (!form.fullName?.trim()) e.fullName = 'Vui lòng nhập họ tên';
       if (!form.phone?.trim()) e.phone = 'Vui lòng nhập SĐT';
       else if (!/^(0|\+84)\d{9,10}$/.test(form.phone.trim())) e.phone = 'SĐT không hợp lệ';
@@ -260,7 +258,6 @@ const AdminUser = () => {
     const endpointMap = {
       Customer: '/api/user/admin/create-customer',
       Doctor:   '/api/user/admin/create-doctor',
-      Nurse:    '/api/user/admin/create-nurse',
     };
     setSaving(true);
     try {
@@ -353,7 +350,7 @@ const AdminUser = () => {
   }));
 
   /* Modal title icon */
-  const roleIcon = { Customer: faUser, Doctor: faUserMd, Nurse: faUserNurse }[createRole];
+  const roleIcon = { Customer: faUser, Doctor: faUserMd }[createRole];
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -393,7 +390,6 @@ const AdminUser = () => {
               {[
                 { role: 'Customer', icon: faUser,      desc: 'Tài khoản khách hàng' },
                 { role: 'Doctor',   icon: faUserMd,    desc: 'Tài khoản bác sĩ + hồ sơ' },
-                { role: 'Nurse',    icon: faUserNurse, desc: 'Tài khoản y tá + hồ sơ' },
               ].map(opt => {
                 const cfg = ROLE_MAP[opt.role];
                 return (
@@ -553,8 +549,8 @@ const AdminUser = () => {
         width={createRole === 'Customer' ? 480 : 580}>
         {createRole && (
           <>
-            {/* Avatar (chỉ Doctor / Nurse) */}
-            {(createRole === 'Doctor' || createRole === 'Nurse') && (
+            {/* Avatar (chỉ Doctor) */}
+            {(createRole === 'Doctor') && (
               <AvatarUpload src={form.avatar} onUploaded={(link) => setForm(f => ({ ...f, avatar: link }))} />
             )}
 
@@ -564,7 +560,7 @@ const AdminUser = () => {
               {errors.email && <ErrMsg msg={errors.email} />}
             </FieldRow>
 
-            {(createRole === 'Doctor' || createRole === 'Nurse') && (
+            {(createRole === 'Doctor') && (
               <FieldRow label="Họ và tên *">
                 <StyledInput placeholder="Nguyễn Văn A" value={form.fullName || ''}
                   onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))} />
@@ -614,27 +610,6 @@ const AdminUser = () => {
                 </div>
                 <FieldRow label="Giới thiệu / Tiểu sử">
                   <StyledTextarea placeholder="Bác sĩ chuyên về..." value={form.bio || ''}
-                    onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} />
-                </FieldRow>
-              </>
-            )}
-
-            {/* Nurse-specific */}
-            {createRole === 'Nurse' && (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
-                  <FieldRow label="Bằng cấp / Chứng chỉ">
-                    <StyledInput placeholder="VD: Cử nhân điều dưỡng..." value={form.qualification || ''}
-                      onChange={e => setForm(f => ({ ...f, qualification: e.target.value }))} />
-                  </FieldRow>
-                  <FieldRow label="Số năm kinh nghiệm">
-                    <StyledInput type="number" min="0" placeholder="3" value={form.experienceYears || ''}
-                      onChange={e => setForm(f => ({ ...f, experienceYears: e.target.value }))} />
-                    {errors.experienceYears && <ErrMsg msg={errors.experienceYears} />}
-                  </FieldRow>
-                </div>
-                <FieldRow label="Giới thiệu / Tiểu sử">
-                  <StyledTextarea placeholder="Y tá có chuyên môn về..." value={form.bio || ''}
                     onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} />
                 </FieldRow>
               </>

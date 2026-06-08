@@ -65,7 +65,9 @@ public class ReminderService {
 
     /** Logic chính — tách ra để gọi cả từ cron và endpoint manual trigger */
     public int doSendUpcomingReminders(LocalDate targetDate) {
-        List<CustomerSchedule> schedules = customerScheduleRepo.findByInjectDate(targetDate);
+        // Entity injectDate là java.sql.Date — convert tránh Hibernate type mismatch
+        java.sql.Date sqlDate = java.sql.Date.valueOf(targetDate);
+        List<CustomerSchedule> schedules = customerScheduleRepo.findByInjectDate(sqlDate);
         int sent = 0;
         for (CustomerSchedule cs : schedules) {
             // Chỉ nhắc cho lịch đã confirmed (đã thanh toán + duyệt)

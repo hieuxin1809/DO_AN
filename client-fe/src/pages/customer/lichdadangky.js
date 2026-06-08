@@ -3,19 +3,9 @@ import { toast } from 'react-toastify';
 import ReactPaginate from 'react-paginate';
 import Select from 'react-select';
 import { getMethod, postMethod, postMethodPayload } from '../../services/request';
-import Swal from 'sweetalert2';
 import StarRating from './star';
-import vnpay from '../../assest/images/vnpay.jpg';
-import { formatMoney } from '../../services/money';
 import DoiLich from './doilich';
-import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
 import { downloadCertificatePdf } from '../../services/certificatePdf';
-
-const PAYPAL_CLIENT_ID = 'AfQvtYaXkCSyaDdKT_f-sY3ZChQm2CXDMx94N0W3XBscBmLG3TgGIT4UzINwxjbFAOG6w19I29dWjMOk';
-
-function toUSD(vnd) {
-    return Math.max(parseFloat((vnd / 25000).toFixed(2)), 1.00).toFixed(2);
-}
 
 /* ── Date / time formatters ──────────────────── */
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -63,6 +53,7 @@ const WARNING = '#f59e0b';
 /* ── status badge config ─────────────────────── */
 const STATUS_MAP = {
     pending:      { label: 'Chờ duyệt',  bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
+    pending_payment: { label: 'Đang giữ chỗ', bg: '#ffedd5', color: '#9a3412', dot: '#f97316' },
     confirmed:    { label: 'Đã duyệt',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
     cancelled:    { label: 'Đã hủy',     bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
     injected:     { label: 'Đã tiêm',    bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
@@ -390,51 +381,6 @@ function ActionBtnBs({ color, bg, border, onClick, 'data-bs-toggle': toggle, 'da
     );
 }
 
-/* ─── SafePayPalButtons wrapper (xem giải thích ở xacnhandangky.js) ── */
-function SafePayPalButtons(props) {
-    const [{ isResolved, isRejected, isPending }] = usePayPalScriptReducer();
-    const [windowReady, setWindowReady] = useState(false);
-
-    useEffect(() => {
-        if (!isResolved) { setWindowReady(false); return; }
-        let cancelled = false;
-        let attempts  = 0;
-        const tick = () => {
-            if (cancelled) return;
-            if (typeof window !== 'undefined' && window.paypal && typeof window.paypal.Buttons === 'function') {
-                setWindowReady(true);
-                return;
-            }
-            attempts++;
-            if (attempts > 50) return;
-            setTimeout(tick, 100);
-        };
-        tick();
-        return () => { cancelled = true; };
-    }, [isResolved]);
-
-    if (isRejected) {
-        return (
-            <div style={{ textAlign: 'center', padding: '24px', color: '#ef4444' }}>
-                <div style={{ fontSize: '28px', marginBottom: '8px' }}>⚠️</div>
-                <p style={{ margin: 0, fontWeight: '600' }}>Không tải được PayPal SDK.</p>
-                <p style={{ margin: '6px 0 0', fontSize: '13px', color: TEXT_2 }}>
-                    Vui lòng tải lại trang (Ctrl + Shift + R) và thử lại.
-                </p>
-            </div>
-        );
-    }
-    if (isPending || !isResolved || !windowReady) {
-        return (
-            <div style={{ textAlign: 'center', padding: '32px', color: TEXT_2 }}>
-                <div style={{ fontSize: '24px', marginBottom: '10px' }}>⏳</div>
-                <p style={{ margin: 0, fontSize: '13.5px' }}>Đang tải PayPal...</p>
-            </div>
-        );
-    }
-    return <PayPalButtons {...props} />;
-}
-
 /* ══════════════════════════════════════════════ */
 var size = 3;
 var url  = '';
@@ -449,8 +395,30 @@ function LichDaDangKy() {
     const [currentPage,      setCurrentPage]      = useState(0);
     const [item,             setItem]             = useState(null);
     const [healthItem,       setHealthItem]       = useState(null);
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const [paypalProcessing, setPaypalProcessing] = useState(false);
+    // (removed showPaymentModal/paypalProcessing — pay-later đã bị bỏ)
+
+    /* ── State + handler cho modal Lịch sử đổi lịch ── */
+    const [historyItem, setHistoryItem] = useState(null);
+    const [historyList, setHistoryList] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+
+    async function openHistory(it) {
+        setHistoryItem(it);
+        setHistoryList([]);
+        setHistoryLoading(true);
+        try {
+            const res = await getMethod(`/api/customer-schedule/customer/change-history/${it.id}`);
+            if (res.status < 300) {
+                setHistoryList(await res.json());
+            } else {
+                toast.error('Không tải được lịch sử');
+            }
+        } catch (e) {
+            toast.error('Lỗi kết nối');
+        } finally {
+            setHistoryLoading(false);
+        }
+    }
 
     useEffect(() => {
         const getItem = async () => {
@@ -579,84 +547,9 @@ function LichDaDangKy() {
         document.getElementById('to').value     = '';
     }
 
-    /* ── VNPay payment ───────────────────────── */
-    async function requestVNPay() {
-        const urlmain  = window.location.origin;
-        var returnurl  = urlmain + '/thanh-cong';
-        var paymentDto = {
-            content:        'Thanh toán',
-            returnUrl:      returnurl,
-            notifyUrl:      returnurl,
-            idScheduleTime: item.vaccineScheduleTime.id,
-        };
-        localStorage.setItem('customerschedule', item.id);
-        const res    = await postMethodPayload('/api/vnpay/urlpayment', paymentDto);
-        var result   = await res.json();
-        if (res.status < 300)   window.open(result.url, '_blank');
-        if (res.status === 417) toast.warning(result.defaultMessage);
-    }
-
-    /* ── PayPal handlers ─────────────────────── */
-    function handlePaypalCreateOrder(data, actions) {
-        const price       = item?.vaccineScheduleTime?.vaccineSchedule?.vaccine?.price ?? 0;
-        const priceUSD    = toUSD(price);
-        const vaccineName = item?.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name ?? 'Vaccine';
-        return actions.order.create({
-            purchase_units: [{
-                amount: { value: priceUSD, currency_code: 'USD' },
-                description: vaccineName,
-            }],
-            application_context: { shipping_preference: 'NO_SHIPPING' },
-        });
-    }
-
-    async function handlePaypalApprove(data, actions) {
-        setPaypalProcessing(true);
-        let stage = 'init';
-        try {
-            // Với intent='capture', PayPal đã auto-capture khi user approve.
-            // KHÔNG gọi actions.order.capture() vì popup đã đóng.
-            const orderId = data?.orderID;
-            console.log('[PayPal] order approved, orderId =', orderId);
-            if (!orderId) throw new Error('Không lấy được orderID từ PayPal');
-
-            stage = 'backend';
-            const payload = { payType: 'PAYPAL', orderId: orderId };
-            console.log('[PayPal] calling backend finish-payment-schedule with:', payload);
-            const res = await postMethodPayload(
-                `/api/customer-schedule/customer/finish-payment-schedule?id=${item.id}`,
-                payload
-            );
-            console.log('[PayPal] backend response status:', res.status);
-
-            if (res.status < 300) {
-                setShowPaymentModal(false);
-                await Swal.fire({
-                    icon: 'success',
-                    title: 'Thanh toán thành công!',
-                    text: 'Lịch tiêm của bạn đã được xác nhận.',
-                    confirmButtonColor: PRIMARY,
-                });
-                await reloadSchedule();
-            } else {
-                let bodyText = '';
-                try { bodyText = await res.text(); } catch (_) {}
-                let msg = '';
-                try { msg = JSON.parse(bodyText)?.defaultMessage || JSON.parse(bodyText)?.message || ''; } catch (_) { msg = bodyText; }
-                console.error('[PayPal] backend error:', res.status, bodyText);
-                toast.error(`Backend từ chối (${res.status}): ${msg || 'không rõ lý do'}`);
-            }
-        } catch (err) {
-            console.error(`[PayPal] error at stage="${stage}":`, err);
-            toast.error(`Lỗi PayPal (${stage}): ${err?.message || String(err)}`);
-        } finally {
-            setPaypalProcessing(false);
-        }
-    }
-
     /* ── render ───────────────────────────────── */
     return (
-        <PayPalScriptProvider options={{ clientId: PAYPAL_CLIENT_ID, currency: 'USD', intent: 'capture', components: 'buttons', environment: 'sandbox' }}>
+        <>
             {/* ── Filter bar ────────────────────────── */}
             <div style={{
                 background: BG_ROW, borderRadius: '12px',
@@ -754,23 +647,32 @@ function LichDaDangKy() {
                                         <HealthStatusCell item={item} onViewMore={setHealthItem} />
                                     </td>
                                     <td style={{ padding: '12px 14px' }}>
-                                        {item.customerSchedulePay === 'CHUA_THANH_TOAN' ? (
-                                            <ActionBtn
-                                                color="#0ea5e9"
-                                                onClick={() => { setItem(item); setShowPaymentModal(true); }}
-                                            >
-                                                💳 Thanh toán
-                                            </ActionBtn>
-                                        ) : item.statusCustomerSchedule === 'confirmed' && !checked ? (
-                                            <ActionBtnBs
-                                                color="#6366f1"
-                                                onClick={() => setItem(item)}
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#modeldoilich"
-                                            >
-                                                🔄 Đổi lịch
-                                            </ActionBtnBs>
-                                        ) : null}
+                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            {item.statusCustomerSchedule === 'confirmed' && !checked && (
+                                                <ActionBtnBs
+                                                    color="#6366f1"
+                                                    onClick={() => setItem(item)}
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#modeldoilich"
+                                                >
+                                                    🔄 Đổi lịch
+                                                </ActionBtnBs>
+                                            )}
+                                            {(item.counterChange ?? 0) > 0 && (
+                                                <button
+                                                    onClick={() => openHistory(item)}
+                                                    title={`Đã đổi ${item.counterChange} lần — Xem lịch sử`}
+                                                    style={{
+                                                        padding: '5px 10px', borderRadius: 8, fontSize: 12,
+                                                        fontWeight: 600, border: `1.5px solid #94a3b8`,
+                                                        background: 'transparent', color: '#64748b',
+                                                        cursor: 'pointer', whiteSpace: 'nowrap',
+                                                    }}
+                                                >
+                                                    📋 LS ({item.counterChange})
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                     <td style={{ padding: '12px 14px' }}>
                                         {item.statusCustomerSchedule === 'injected' && (
@@ -848,105 +750,6 @@ function LichDaDangKy() {
 
             {/* ══ Modals ═══════════════════════════════ */}
 
-            {/* ── Modal thanh toán (React state) ─────── */}
-            {showPaymentModal && item && (
-                <div
-                    style={{
-                        position: 'fixed', inset: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 9999,
-                    }}
-                    onClick={() => { if (!paypalProcessing) setShowPaymentModal(false); }}
-                >
-                    <div
-                        style={{
-                            background: '#fff', borderRadius: '16px',
-                            padding: '28px 32px', width: '440px', maxWidth: '95vw',
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-                            position: 'relative',
-                        }}
-                        onClick={e => e.stopPropagation()}
-                    >
-                        {/* header */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                            <div>
-                                <h5 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: TEXT }}>Thanh toán</h5>
-                                <div style={{ fontSize: '20px', fontWeight: '800', color: PRIMARY, marginTop: '4px' }}>
-                                    {formatMoney(item.vaccineScheduleTime.vaccineSchedule.vaccine.price)}
-                                </div>
-                                <div style={{ fontSize: '12.5px', color: TEXT_2, marginTop: '2px' }}>
-                                    ≈ ${toUSD(item.vaccineScheduleTime.vaccineSchedule.vaccine.price)} USD
-                                </div>
-                            </div>
-                            {!paypalProcessing && (
-                                <button
-                                    onClick={() => setShowPaymentModal(false)}
-                                    style={{
-                                        background: '#f1f5f9', border: 'none', borderRadius: '8px',
-                                        width: '32px', height: '32px', cursor: 'pointer',
-                                        fontSize: '16px', color: TEXT_2,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    }}
-                                >
-                                    ✕
-                                </button>
-                            )}
-                        </div>
-
-                        {/* divider */}
-                        <div style={{ borderTop: `1px solid ${BORDER}`, marginBottom: '20px' }} />
-
-                        {/* PayPal */}
-                        <div style={{ marginBottom: '16px' }}>
-                            <div style={{ fontSize: '13px', fontWeight: '700', color: TEXT_2, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                Thanh toán qua PayPal
-                            </div>
-                            <SafePayPalButtons
-                                style={{ layout: 'vertical', color: 'blue', shape: 'rect', label: 'pay', height: 40 }}
-                                createOrder={handlePaypalCreateOrder}
-                                onApprove={handlePaypalApprove}
-                                onCancel={() => toast.info('Đã hủy thanh toán PayPal.')}
-                                onError={(err) => { console.error('PayPal error:', err); toast.error('Có lỗi xảy ra với PayPal.'); }}
-                                disabled={paypalProcessing}
-                            />
-                        </div>
-
-                        {/* divider */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                            <div style={{ flex: 1, height: '1px', background: BORDER }} />
-                            <span style={{ fontSize: '12px', color: TEXT_2, fontWeight: '600' }}>HOẶC</span>
-                            <div style={{ flex: 1, height: '1px', background: BORDER }} />
-                        </div>
-
-                        {/* VNPay */}
-                        <button
-                            onClick={requestVNPay}
-                            disabled={paypalProcessing}
-                            style={{
-                                width: '100%', padding: '10px 16px', borderRadius: '10px',
-                                border: `1.5px solid ${BORDER}`, background: '#fff',
-                                cursor: paypalProcessing ? 'not-allowed' : 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                transition: 'border-color 0.15s',
-                                opacity: paypalProcessing ? 0.6 : 1,
-                            }}
-                            onMouseEnter={e => { if (!paypalProcessing) e.currentTarget.style.borderColor = ACCENT; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; }}
-                        >
-                            <span style={{ fontWeight: '600', fontSize: '13.5px', color: TEXT }}>Thanh toán qua VNPay</span>
-                            <img src={vnpay} alt="VNPay" style={{ height: '28px', objectFit: 'contain' }} />
-                        </button>
-
-                        {paypalProcessing && (
-                            <div style={{ textAlign: 'center', marginTop: '16px', color: TEXT_2, fontSize: '13px' }}>
-                                Đang xử lý thanh toán...
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
             {/* Modal gửi phản hồi */}
             <div className="modal fade" id="exampleModal" tabIndex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
                 <div className="modal-dialog modal-dialog-centered">
@@ -1017,8 +820,83 @@ function LichDaDangKy() {
                 </div>
             )}
 
-            <DoiLich customerSchedule={item} />
-        </PayPalScriptProvider>
+            {/* Modal lịch sử đổi lịch */}
+            {historyItem && (
+                <div
+                    className="modal fade show"
+                    style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.4)' }}
+                    tabIndex="-1"
+                    onClick={() => setHistoryItem(null)}
+                >
+                    <div className="modal-dialog modal-lg modal-dialog-centered" onClick={e => e.stopPropagation()}>
+                        <div className="modal-content">
+                            <div className="modal-header" style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`, color: '#fff' }}>
+                                <h5 className="modal-title" style={{ color: '#fff' }}>
+                                    📋 Lịch sử đổi lịch — Mã ĐK #{historyItem.id}
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setHistoryItem(null)}></button>
+                            </div>
+                            <div className="modal-body">
+                                {historyLoading ? (
+                                    <div style={{ textAlign: 'center', padding: 30, color: TEXT_2 }}>Đang tải...</div>
+                                ) : historyList.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: 30, color: TEXT_2 }}>
+                                        <div style={{ fontSize: 32, marginBottom: 10 }}>📭</div>
+                                        Chưa có lịch sử đổi
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        {historyList.map((h, idx) => (
+                                            <div key={h.id} style={{
+                                                background: BG_ROW, borderRadius: 10,
+                                                border: `1px solid ${BORDER}`, padding: '14px 16px',
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                                    <strong style={{ color: PRIMARY }}>Lần đổi #{historyList.length - idx}</strong>
+                                                    <span style={{ fontSize: 12, color: TEXT_2 }}>
+                                                        🕒 {formatDateTime(h.changedAt)}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 12, alignItems: 'center' }}>
+                                                    <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', border: `1px solid ${BORDER}` }}>
+                                                        <div style={{ fontSize: 11, color: TEXT_2, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>
+                                                            Slot cũ
+                                                        </div>
+                                                        <div style={{ fontWeight: 600, color: TEXT }}>
+                                                            {formatDate(h.fromInjectDate)}
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: TEXT_2 }}>
+                                                            {formatTime(h.fromStart)} – {formatTime(h.fromEnd)}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ fontSize: 24, color: ACCENT, textAlign: 'center' }}>→</div>
+                                                    <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', border: `1px solid ${SUCCESS}55` }}>
+                                                        <div style={{ fontSize: 11, color: SUCCESS, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>
+                                                            Slot mới
+                                                        </div>
+                                                        <div style={{ fontWeight: 600, color: TEXT }}>
+                                                            {formatDate(h.toInjectDate)}
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: TEXT_2 }}>
+                                                            {formatTime(h.toStart)} – {formatTime(h.toEnd)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setHistoryItem(null)}>Đóng</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <DoiLich customerSchedule={item} onChanged={reloadSchedule} />
+        </>
     );
 }
 
