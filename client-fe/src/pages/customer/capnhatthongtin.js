@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import Select from 'react-select';
 import { getMethod, postMethodPayload, uploadSingleFile } from '../../services/request';
+import { DatePicker } from 'antd';
+import dayjs from 'dayjs';
 
 /* ── palette ──────────────────────────────────── */
 const PRIMARY  = '#2A388F';
@@ -178,6 +180,7 @@ function CapNhatThongTin() {
     const [tinh,       setTinh]       = useState(null);
     const [huyencs,    setHuyenCs]    = useState(null);
     const [previewSrc, setPreviewSrc] = useState('');
+    const [dobString,  setDobString]  = useState('');
 
     useEffect(() => {
         const getAddress = async () => {
@@ -195,6 +198,9 @@ function CapNhatThongTin() {
                     avatar = result.avatar;
                     setPreviewSrc(result.avatar || '');
                     setHuyenCs(result.district);
+                    if (result.birthdate) {
+                        setDobString(result.birthdate.split('T')[0]);
+                    }
                 }
             }
             setIsLoading(false);
@@ -328,7 +334,24 @@ function CapNhatThongTin() {
 
                         <div>
                             <FieldLabel required>Ngày sinh</FieldLabel>
-                            <StyledInput name="birthdate" type="date" defaultValue={profile.birthdate || ''} required />
+                            <DatePicker
+                                value={dobString ? dayjs(dobString) : null}
+                                onChange={(date, dateString) => setDobString(dateString)}
+                                format="YYYY-MM-DD"
+                                placeholder="Chọn ngày sinh"
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: `1.5px solid ${BORDER}`,
+                                    background: BG_INPUT,
+                                    fontSize: '14px',
+                                    color: TEXT,
+                                    outline: 'none',
+                                    height: '42px'
+                                }}
+                            />
+                            <input type="hidden" name="birthdate" value={dobString} />
                         </div>
 
                         <div>

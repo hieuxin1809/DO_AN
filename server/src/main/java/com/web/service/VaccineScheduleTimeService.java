@@ -80,6 +80,8 @@ public class VaccineScheduleTimeService {
         SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm");
         long currentTimeInMillis = startTime.getTime(); // Thời gian hiện tại bắt đầu từ startTime
 
+        List<VaccineScheduleTime> existingSlots = vaccineScheduleTimeRepository.findByVaccineSchedule(dto.getScheduleId());
+
         for (int i = 0; i < peopleDistribution.size(); i++) {
             long slotEndTimeInMillis = currentTimeInMillis + slotDurationInMinutes * 60 * 1000; // Thời gian kết thúc của mỗi slot
 
@@ -88,18 +90,37 @@ public class VaccineScheduleTimeService {
                 slotEndTimeInMillis = endTime.getTime();
             }
 
+            Time currentStart = new Time(currentTimeInMillis);
+            Time currentEnd = new Time(slotEndTimeInMillis);
+            Date injectDate = dto.getDate();
+
             // In ra khoảng thời gian từ start đến end cho từng slot
-            System.out.println("Khoảng thời gian " + timeFormat.format(new Time(currentTimeInMillis))
-                    + " - " + timeFormat.format(new Time(slotEndTimeInMillis))
+            System.out.println("Khoảng thời gian " + timeFormat.format(currentStart)
+                    + " - " + timeFormat.format(currentEnd)
                     + ": " + peopleDistribution.get(i) + " người");
 
-            VaccineScheduleTime vaccineScheduleTime = new VaccineScheduleTime();
-            vaccineScheduleTime.setVaccineSchedule(vaccineSchedule);
-            vaccineScheduleTime.setEnd(new Time(slotEndTimeInMillis));
-            vaccineScheduleTime.setStart(new Time(currentTimeInMillis));
-            vaccineScheduleTime.setInjectDate(dto.getDate());
-            vaccineScheduleTime.setLimitPeople(peopleDistribution.get(i));
-            list.add(vaccineScheduleTime);
+            VaccineScheduleTime existingSlot = null;
+            for (VaccineScheduleTime est : existingSlots) {
+                if (est.getInjectDate() != null && est.getInjectDate().toString().equals(injectDate.toString())
+                        && est.getStart() != null && est.getStart().toString().substring(0, 5).equals(currentStart.toString().substring(0, 5))
+                        && est.getEnd() != null && est.getEnd().toString().substring(0, 5).equals(currentEnd.toString().substring(0, 5))) {
+                    existingSlot = est;
+                    break;
+                }
+            }
+
+            if (existingSlot != null) {
+                existingSlot.setLimitPeople(existingSlot.getLimitPeople() + peopleDistribution.get(i));
+                list.add(existingSlot);
+            } else {
+                VaccineScheduleTime vaccineScheduleTime = new VaccineScheduleTime();
+                vaccineScheduleTime.setVaccineSchedule(vaccineSchedule);
+                vaccineScheduleTime.setEnd(currentEnd);
+                vaccineScheduleTime.setStart(currentStart);
+                vaccineScheduleTime.setInjectDate(injectDate);
+                vaccineScheduleTime.setLimitPeople(peopleDistribution.get(i));
+                list.add(vaccineScheduleTime);
+            }
 
             currentTimeInMillis = slotEndTimeInMillis;
 
@@ -108,15 +129,15 @@ public class VaccineScheduleTimeService {
                 break;
             }
         }
-        Integer tong = 0;
-        for(VaccineScheduleTime v : list){
-            tong += v.getLimitPeople();
-        }
         Long count = vaccineScheduleTimeRepository.quantityBySchedule(dto.getScheduleId());
         if(count == null){
             count = 0L;
         }
-        if(vaccineSchedule.getLimitPeople() < count + tong){
+        long addedLimit = 0;
+        for (int i = 0; i < peopleDistribution.size(); i++) {
+            addedLimit += peopleDistribution.get(i);
+        }
+        if(vaccineSchedule.getLimitPeople() < count + addedLimit){
             throw new MessageException("Số lượng mũi tiêm hiện tại đang phát hành là: "+count+" chỉ được phát hành thêm: "+(vaccineSchedule.getLimitPeople() - count)+" mũi tiêm");
         }
         vaccineScheduleTimeRepository.saveAll(list);

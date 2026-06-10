@@ -64,7 +64,7 @@ function ActionBtn({ icon, color, title, onClick }) {
 function Modal({ open, onClose, title, children, width = 560 }) {
   if (!open) return null;
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999,
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1050,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)' }} onClick={onClose} />
       <div style={{ position: 'relative', background: '#fff', borderRadius: 16,
@@ -186,13 +186,6 @@ const AdminCertificates = () => {
       toast.warning('Vui lòng nhập lý do thu hồi (tối thiểu 5 ký tự)');
       return;
     }
-    const { isConfirmed } = await Swal.fire({
-      title: 'Xác nhận thu hồi?',
-      html: `Mã giấy <strong>${revokeTarget.serialNo}</strong> sẽ bị đánh dấu KHÔNG HỢP LỆ.<br/>Hành động này không thể hoàn tác.`,
-      icon: 'warning', showCancelButton: true,
-      confirmButtonColor: DANGER, confirmButtonText: 'Thu hồi', cancelButtonText: 'Hủy',
-    });
-    if (!isConfirmed) return;
     setRevoking(true);
     try {
       const res = await authFetch(`/api/certificate/admin/revoke/${revokeTarget.id}`, {
@@ -215,6 +208,7 @@ const AdminCertificates = () => {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <style dangerouslySetInnerHTML={{ __html: `.swal2-container { z-index: 100000 !important; }` }} />
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import Select from 'react-select';
 import { getMethod } from '../../services/request';
+import { DatePicker } from 'antd';
+import dayjs from 'dayjs';
 
 /* ── palette ──────────────────────────────────── */
 const PRIMARY  = '#2A388F';
@@ -207,10 +209,12 @@ function DangKyTiem() {
     const [patientAddress, setPatientAddress] = useState('');
     const [patientIdCard,  setPatientIdCard]  = useState('');
     const [profileLoaded,  setProfileLoaded]  = useState(false); // đã load profile của user login chưa
+    const [startDateString, setStartDateString] = useState('');
 
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
         setCurrentDate(today);
+        setStartDateString(today);
         const fetchData = async () => {
             const res    = await getMethod('/api/vaccine-type/find-all');
             const result = await res.json();
@@ -629,16 +633,18 @@ function DangKyTiem() {
                             </div>
                             <div>
                                 <FieldLabel>Ngày sinh</FieldLabel>
-                                <input
-                                    type="date" value={patientDob} onChange={e => setPatientDob(e.target.value)}
-                                    max={currentDate}
+                                <DatePicker
+                                    value={patientDob ? dayjs(patientDob) : null}
+                                    onChange={(date, dateString) => setPatientDob(dateString)}
+                                    disabledDate={(current) => current && current > dayjs().endOf('day')}
+                                    format="YYYY-MM-DD"
+                                    placeholder="Chọn ngày sinh"
                                     style={{
                                         width:'100%', padding:'12px 14px', borderRadius:'12px',
                                         border:`1.5px solid ${BORDER}`, background:'#fff',
-                                        fontSize:'14px', color:TEXT, outline:'none', boxSizing:'border-box', fontFamily:'inherit',
+                                        fontSize:'14px', color:TEXT, outline:'none', boxSizing:'border-box',
+                                        height: '46px'
                                     }}
-                                    onFocus={e => e.target.style.borderColor = ACCENT}
-                                    onBlur={e  => e.target.style.borderColor = BORDER}
                                 />
                                 {patientDob && (() => {
                                     const d = new Date(patientDob);
@@ -822,50 +828,24 @@ function DangKyTiem() {
                 {/* Step 2: Thời gian & địa điểm */}
                 <SectionCard step="2" icon="📅" title="Chọn ngày & địa điểm tiêm">
                     {/* date + search */}
-                    <style>{`
-                        #start::-webkit-calendar-picker-indicator { opacity: 0; cursor: pointer; }
-                        #start { cursor: pointer; }
-                    `}</style>
                     <div style={{ display:'flex', gap:'14px', flexWrap:'wrap', alignItems:'flex-end', marginBottom:'24px' }}>
                         <div style={{ flex:'0 0 260px' }}>
                             <FieldLabel>Ngày tiêm</FieldLabel>
-                            <div
-                                style={{ position:'relative' }}
-                                onClick={() => { try { document.getElementById('start')?.showPicker?.(); } catch(e){} }}
-                            >
-                                <input
-                                    id="start"
-                                    type="date"
-                                    min={currentDate}
-                                    defaultValue={currentDate}
-                                    style={{
-                                        width:'100%', padding:'12px 44px 12px 44px', borderRadius:'12px',
-                                        border:`1.5px solid ${BORDER}`, background:'#fff',
-                                        fontSize:'14px', fontWeight:'600', color:TEXT, outline:'none',
-                                        boxSizing:'border-box', fontFamily:'inherit',
-                                        boxShadow:'0 1px 3px rgba(0,0,0,0.03)',
-                                        transition:'all 0.18s',
-                                    }}
-                                    onFocus={e => {
-                                        e.target.style.borderColor = ACCENT;
-                                        e.target.style.boxShadow = `0 0 0 4px rgba(14,165,233,0.12), 0 2px 8px rgba(0,0,0,0.04)`;
-                                    }}
-                                    onBlur={e  => {
-                                        e.target.style.borderColor = BORDER;
-                                        e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.03)';
-                                    }}
-                                />
-                                {/* calendar icon (left) */}
-                                <span style={{
-                                    position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)',
-                                    fontSize:'17px', pointerEvents:'none',
-                                }}>📅</span>
-                                {/* chevron icon (right) */}
-                                <span style={{
-                                    position:'absolute', right:'14px', top:'50%', transform:'translateY(-50%)',
-                                    color:'#94a3b8', fontSize:'12px', pointerEvents:'none',
-                                }}>▼</span>
-                            </div>
+                            <DatePicker
+                                value={startDateString ? dayjs(startDateString) : null}
+                                onChange={(date, dateString) => setStartDateString(dateString)}
+                                disabledDate={(current) => current && current < dayjs().startOf('day')}
+                                format="YYYY-MM-DD"
+                                placeholder="Chọn ngày tiêm"
+                                style={{
+                                    width:'100%', padding:'12px 14px', borderRadius:'12px',
+                                    border:`1.5px solid ${BORDER}`, background:'#fff',
+                                    fontSize:'14px', fontWeight:'600', color:TEXT, outline:'none',
+                                    boxSizing:'border-box',
+                                    height: '46px'
+                                }}
+                            />
+                            <input id="start" type="hidden" value={startDateString} />
                         </div>
                         <button
                             onClick={getCenter}
