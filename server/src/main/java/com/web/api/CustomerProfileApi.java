@@ -38,10 +38,15 @@ public class CustomerProfileApi {
 
     /* -----------ADMIN-----------*/
 
-    /* Get list customer*/
     @GetMapping("/admin/list-customer")
-    public ResponseEntity<?> findAllCustomerProfile(@RequestParam(required = false) String q, Pageable pageable){
-        Page<CustomerProfileDTO> result = customerProfileService.getCustomers(q, pageable);
+    public ResponseEntity<?> findAllCustomerProfile(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String gender,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            Pageable pageable){
+        Page<CustomerProfileDTO> result = customerProfileService.getCustomers(q, gender, city, fromDate, toDate, pageable);
         return new ResponseEntity<>(result, HttpStatus.OK);
     }
 

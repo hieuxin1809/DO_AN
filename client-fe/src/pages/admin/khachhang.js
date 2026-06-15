@@ -28,6 +28,81 @@ const inpStyle = (err) => ({
   border: `1.5px solid ${err ? D : B}`, outline: 'none', boxSizing: 'border-box', background: '#fff',
 });
 
+const lblStyle = {
+  fontSize: '11px',
+  fontWeight: '700',
+  color: T2,
+  textTransform: 'uppercase',
+  letterSpacing: '0.4px',
+  marginBottom: '4px',
+};
+const ctrlStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  border: `1.5px solid ${B}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  background: '#fff',
+  height: '38px',
+  boxSizing: 'border-box',
+};
+const inpCtrlStyle = {
+  border: 'none',
+  outline: 'none',
+  fontSize: '13.5px',
+  color: T,
+  background: 'transparent',
+  width: '100%',
+};
+const selectCtrlStyle = {
+  border: `1.5px solid ${B}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  fontSize: '13.5px',
+  color: T,
+  background: '#fff',
+  outline: 'none',
+  cursor: 'pointer',
+  boxSizing: 'border-box',
+  width: '100%',
+  height: '38px',
+};
+const dateCtrlStyle = {
+  border: `1.5px solid ${B}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  fontSize: '13.5px',
+  color: T,
+  background: '#fff',
+  outline: 'none',
+  cursor: 'pointer',
+  boxSizing: 'border-box',
+  width: '100%',
+  height: '38px',
+};
+const clrStyle = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: T2,
+  padding: 0,
+};
+const btnResetStyle = {
+  padding: '9px 14px',
+  borderRadius: 9,
+  border: `1.5px solid ${B}`,
+  background: '#f8fafc',
+  color: T2,
+  cursor: 'pointer',
+  fontWeight: 700,
+  fontSize: 13,
+  display: 'flex',
+  alignItems: 'center',
+  transition: 'all 0.15s',
+  height: '38px',
+};
+
 function Field({ label, required, error, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -88,6 +163,11 @@ const AdminKhachHang = () => {
   const [searchTerm,  setSearchTerm]  = useState('');
   const [loading,     setLoading]     = useState(true);
 
+  const [selGender, setSelGender]       = useState('');
+  const [selCity, setSelCity]           = useState('');
+  const [fromDate, setFromDate]         = useState('');
+  const [toDate, setToDate]             = useState('');
+
   const [showDetail,  setShowDetail]  = useState(false);
   const [showEdit,    setShowEdit]    = useState(false);
   const [selected,    setSelected]    = useState(null);
@@ -112,13 +192,27 @@ const AdminKhachHang = () => {
       .catch(e => console.error(e));
   }, []);
 
-  useEffect(() => { fetchPage(0); }, [searchTerm]);
+  useEffect(() => {
+    fetchPage(0);
+  }, [searchTerm, selGender, selCity, fromDate, toDate]);
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelGender('');
+    setSelCity('');
+    setFromDate('');
+    setToDate('');
+  };
 
   const fetchPage = async (page) => {
     setLoading(true);
     try {
       let url = `/api/customer-profile/admin/list-customer?page=${page}&size=${PAGE_SIZE}&sort=id,asc`;
       if (searchTerm) url += `&q=${encodeURIComponent(searchTerm)}`;
+      if (selGender) url += `&gender=${selGender}`;
+      if (selCity) url += `&city=${encodeURIComponent(selCity)}`;
+      if (fromDate) url += `&fromDate=${fromDate}`;
+      if (toDate) url += `&toDate=${toDate}`;
       const res  = await getMethod(url);
       const data = await res.json();
       setItems(data.content || []);
@@ -268,23 +362,71 @@ const AdminKhachHang = () => {
         </div>
       </div>
 
+      {/* ── filter bar ── */}
+      <div style={{
+        background: '#fff', borderRadius: 14, padding: '16px 20px', marginBottom: 18,
+        border: `1px solid ${B}`, boxShadow: '0 1px 6px rgba(0,0,0,.04)',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px',
+      }}>
+        {/* Tìm kiếm */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={lblStyle}>Tìm kiếm</label>
+          <div style={ctrlStyle}>
+            <FontAwesomeIcon icon={faSearch} style={{ color: T2, fontSize: 13 }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Họ tên, SĐT, Email..."
+              style={inpCtrlStyle} />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} style={clrStyle}>
+                <FontAwesomeIcon icon={faX} style={{ fontSize: 10 }} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Giới tính */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={lblStyle}>Giới tính</label>
+          <select value={selGender} onChange={e => setSelGender(e.target.value)} style={selectCtrlStyle}>
+            <option value="">Tất cả</option>
+            <option value="MALE">Nam</option>
+            <option value="FEMALE">Nữ</option>
+            <option value="OTHER">Khác</option>
+          </select>
+        </div>
+
+        {/* Tỉnh/Thành phố */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={lblStyle}>Tỉnh/Thành phố</label>
+          <select value={selCity} onChange={e => setSelCity(e.target.value)} style={selectCtrlStyle}>
+            <option value="">Tất cả</option>
+            {provinces.map(p => (
+              <option key={p.code} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Từ ngày */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={lblStyle}>Từ ngày tạo</label>
+          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={dateCtrlStyle} />
+        </div>
+
+        {/* Đến ngày */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={lblStyle}>Đến ngày tạo</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={dateCtrlStyle} />
+            {(searchTerm || selGender || selCity || fromDate || toDate) && (
+              <button onClick={handleResetFilters} style={btnResetStyle}>Reset</button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ── table card ── */}
       <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden',
         border: `1px solid ${B}`, boxShadow: '0 2px 12px rgba(0,0,0,.06)' }}>
-        {/* search bar */}
-        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${B}`,
-          display: 'flex', alignItems: 'center', gap: 10 }}>
-          <FontAwesomeIcon icon={faSearch} style={{ color: T2, fontSize: 14, flexShrink: 0 }} />
-          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Tìm theo tên, số điện thoại, email..."
-            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: T, background: 'transparent' }} />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: T2 }}>
-              <FontAwesomeIcon icon={faX} />
-            </button>
-          )}
-        </div>
 
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>

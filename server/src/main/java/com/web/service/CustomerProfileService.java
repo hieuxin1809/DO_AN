@@ -11,8 +11,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
-
+import org.springframework.data.jpa.domain.Specification;
+import com.web.enums.Gender;
+import javax.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -89,8 +94,49 @@ public class CustomerProfileService {
         }
     }
 
-    public Page<CustomerProfileDTO> getCustomers(String q, Pageable pageable){
-        Page<CustomerProfile> customers = customerProfileRepository.getCustomerProfile(q, pageable);
+    public Page<CustomerProfileDTO> getCustomers(String q, String gender, String city, String fromDate, String toDate, Pageable pageable) {
+        Specification<CustomerProfile> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (q != null && !q.trim().isEmpty()) {
+                String likeTerm = "%" + q.trim().toLowerCase() + "%";
+                Predicate fullNameLike = cb.like(cb.lower(root.get("fullName")), likeTerm);
+                Predicate phoneLike = cb.like(cb.lower(root.get("phone")), likeTerm);
+                Predicate emailLike = cb.like(cb.lower(root.join("user").get("email")), likeTerm);
+                predicates.add(cb.or(fullNameLike, phoneLike, emailLike));
+            }
+
+            if (gender != null && !gender.trim().isEmpty()) {
+                Gender genderEnum = null;
+                if ("MALE".equalsIgnoreCase(gender)) genderEnum = Gender.Male;
+                else if ("FEMALE".equalsIgnoreCase(gender)) genderEnum = Gender.Female;
+                else if ("OTHER".equalsIgnoreCase(gender)) genderEnum = Gender.Other;
+                if (genderEnum != null) {
+                    predicates.add(cb.equal(root.get("gender"), genderEnum));
+                }
+            }
+
+            if (city != null && !city.trim().isEmpty()) {
+                predicates.add(cb.equal(root.get("city"), city.trim()));
+            }
+
+            if (fromDate != null && !fromDate.trim().isEmpty()) {
+                try {
+                    Timestamp start = Timestamp.valueOf(LocalDate.parse(fromDate.trim()).atStartOfDay());
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("createdDate"), start));
+                } catch (Exception ignore) {}
+            }
+            if (toDate != null && !toDate.trim().isEmpty()) {
+                try {
+                    Timestamp end = Timestamp.valueOf(LocalDate.parse(toDate.trim()).atTime(LocalTime.MAX));
+                    predicates.add(cb.lessThanOrEqualTo(root.get("createdDate"), end));
+                } catch (Exception ignore) {}
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<CustomerProfile> customers = customerProfileRepository.findAll(spec, pageable);
         return customers.map(this::mapToDTO);
     }
 

@@ -21,6 +21,7 @@ const authFetch = (url) =>
   fetch(BASE + url, { headers: { Authorization: `Bearer ${token()}` } });
 
 const STATUS_VI = {
+  pending_payment: { label: 'Chờ thanh toán', color: WARNING, bg: 'rgba(245,158,11,.1)' },
   pending:      { label: 'Chờ duyệt',  color: WARNING, bg: 'rgba(245,158,11,.1)' },
   confirmed:    { label: 'Đã duyệt',   color: ACCENT,  bg: 'rgba(14,165,233,.1)' },
   injected:     { label: 'Đã tiêm',    color: SUCCESS, bg: 'rgba(16,185,129,.1)' },
@@ -35,10 +36,71 @@ function fmtDate(s) {
   return isNaN(d.getTime()) ? String(s) : d.toLocaleDateString('vi-VN');
 }
 
+const labelStyle = {
+  fontSize: '11px',
+  fontWeight: '700',
+  color: TEXT_2,
+  textTransform: 'uppercase',
+  letterSpacing: '0.4px',
+  marginBottom: '4px',
+};
+const inputContainerStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  border: `1.5px solid ${BORDER}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  background: '#fff',
+};
+const filterInputStyle = {
+  border: 'none',
+  outline: 'none',
+  fontSize: '13.5px',
+  color: TEXT,
+  background: 'transparent',
+  width: '100%',
+};
+const selectStyle = {
+  border: `1.5px solid ${BORDER}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  fontSize: '13.5px',
+  color: TEXT,
+  background: '#fff',
+  outline: 'none',
+  cursor: 'pointer',
+  boxSizing: 'border-box',
+  width: '100%',
+};
+const dateInputStyle = {
+  border: `1.5px solid ${BORDER}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  fontSize: '13.5px',
+  color: TEXT,
+  background: '#fff',
+  outline: 'none',
+  cursor: 'pointer',
+  boxSizing: 'border-box',
+  width: '100%',
+};
+const clearBtnStyle = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: TEXT_2,
+  padding: 0,
+};
+
 const DoctorMyPatients = () => {
-  const [items, setItems]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch]   = useState('');
+  const [items, setItems]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState('');
+  const [selVaccine, setSelVaccine] = useState('');
+  const [selStatus, setSelStatus]   = useState('');
+  const [fromDate, setFromDate]     = useState('');
+  const [toDate, setToDate]         = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -52,14 +114,50 @@ const DoctorMyPatients = () => {
     load();
   }, []);
 
-  const filtered = search
-    ? items.filter(i => {
-        const q = search.toLowerCase();
-        return (i.fullName || '').toLowerCase().includes(q)
-            || (i.phone || '').includes(q)
-            || (i.idCard || '').includes(q);
-      })
-    : items;
+  const handleResetFilters = () => {
+    setSearch('');
+    setSelVaccine('');
+    setSelStatus('');
+    setFromDate('');
+    setToDate('');
+  };
+
+  const uniqueVaccines = Array.from(
+    new Set(
+      items
+        .map(i => i.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name)
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const filtered = items.filter(i => {
+    if (search) {
+      const q = search.toLowerCase();
+      const matchText = (i.fullName || '').toLowerCase().includes(q)
+          || (i.phone || '').includes(q)
+          || (i.idCard || '').includes(q);
+      if (!matchText) return false;
+    }
+
+    if (selVaccine) {
+      const vacName = i.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name;
+      if (vacName !== selVaccine) return false;
+    }
+
+    if (selStatus) {
+      if (i.statusCustomerSchedule !== selStatus) return false;
+    }
+
+    const injectDateStr = i.vaccineScheduleTime?.injectDate;
+    if (injectDateStr) {
+      if (fromDate && injectDateStr < fromDate) return false;
+      if (toDate && injectDateStr > toDate) return false;
+    } else {
+      if (fromDate || toDate) return false;
+    }
+
+    return true;
+  });
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -76,29 +174,100 @@ const DoctorMyPatients = () => {
             Bệnh nhân của tôi
           </h2>
           <div style={{ fontSize: 13, color: TEXT_2 }}>
-            Tổng {items.length} ca đã/đang phụ trách
+            Tổng {items.length} ca đã/đang phụ trách {filtered.length !== items.length && `(Đang lọc hiển thị ${filtered.length})`}
           </div>
         </div>
       </div>
 
-      {/* Search */}
+      {/* Filter Bar */}
       <div style={{
-        background: '#fff', borderRadius: 14, padding: '12px 16px', marginBottom: 18,
+        background: '#fff', borderRadius: 14, padding: '16px 20px', marginBottom: 18,
         border: `1px solid ${BORDER}`, boxShadow: '0 1px 6px rgba(0,0,0,.04)',
-        display: 'flex', alignItems: 'center', gap: 10,
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px',
       }}>
-        <FontAwesomeIcon icon={faSearch} style={{ color: TEXT_2, fontSize: 13 }} />
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Tìm theo tên, SĐT, CCCD..."
-          style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: TEXT, background: 'transparent' }}
-        />
-        {search && (
-          <button onClick={() => setSearch('')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: TEXT_2 }}>
-            <FontAwesomeIcon icon={faX} />
-          </button>
-        )}
+        {/* Search */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={labelStyle}>Tìm kiếm</label>
+          <div style={inputContainerStyle}>
+            <FontAwesomeIcon icon={faSearch} style={{ color: TEXT_2, fontSize: 13 }} />
+            <input
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Họ tên, SĐT, CCCD..."
+              style={filterInputStyle}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={clearBtnStyle}>
+                <FontAwesomeIcon icon={faX} style={{ fontSize: 10 }} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Vaccine Filter */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={labelStyle}>Vắc-xin</label>
+          <select
+            value={selVaccine} onChange={e => setSelVaccine(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">Tất cả vắc-xin</option>
+            {uniqueVaccines.map(v => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Status Filter */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={labelStyle}>Trạng thái</label>
+          <select
+            value={selStatus} onChange={e => setSelStatus(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">Tất cả trạng thái</option>
+            {Object.keys(STATUS_VI).map(k => (
+              <option key={k} value={k}>{STATUS_VI[k].label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* From Date */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={labelStyle}>Từ ngày</label>
+          <input
+            type="date"
+            value={fromDate} onChange={e => setFromDate(e.target.value)}
+            style={dateInputStyle}
+          />
+        </div>
+
+        {/* To Date */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={labelStyle}>Đến ngày</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="date"
+              value={toDate} onChange={e => setToDate(e.target.value)}
+              style={dateInputStyle}
+            />
+            {(search || selVaccine || selStatus || fromDate || toDate) && (
+              <button
+                onClick={handleResetFilters}
+                style={{
+                  padding: '9px 14px', borderRadius: 9, border: `1.5px solid ${BORDER}`,
+                  background: '#f8fafc', color: TEXT_2, cursor: 'pointer',
+                  fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center',
+                  transition: 'all 0.15s', height: '38px',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = TEXT; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = TEXT_2; }}
+                title="Xóa tất cả bộ lọc"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Table */}

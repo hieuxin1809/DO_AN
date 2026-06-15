@@ -7,9 +7,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.jpa.domain.Specification;
 import java.util.List;
 
 public interface CustomerProfileRepository extends JpaRepository<CustomerProfile, Long> {
+
+    Page<CustomerProfile> findAll(Specification<CustomerProfile> spec, Pageable pageable);
 
     @Query("select c from CustomerProfile c where c.user.id = ?1")
     public CustomerProfile findByUser(Long userId);
