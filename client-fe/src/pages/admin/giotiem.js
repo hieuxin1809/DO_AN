@@ -143,7 +143,7 @@ const AdminGioTiemChung = ({lichtiem})=>{
         btnSave.innerHTML = '<i class="fa fa-save"></i>';
         btnSave.title = "Lưu ca";
         btnSave.onclick = function(){
-            addSingle(inputStart, inputEnd, inputSoLuong, date);
+            addSingle(inputStart, inputEnd, inputSoLuong, date, tr);
         }
 
         const btnDelete = document.createElement('button');
@@ -169,7 +169,7 @@ const AdminGioTiemChung = ({lichtiem})=>{
         e.remove();
     }
 
-    async function addSingle(start, end, soluong, date){
+    async function addSingle(start, end, soluong, date, trElement){
         var payload = {
             start: start.value,
             end: end.value,
@@ -182,6 +182,9 @@ const AdminGioTiemChung = ({lichtiem})=>{
         var res = await postMethodPayload('/api/vaccine-schedule-time/admin/create', payload)
         if (res.status < 300) {
             toast.success("Tạo thành công");
+            if (trElement) {
+                trElement.remove();
+            }
             loadGioTiem(lichtiem.id)
         } else {
             if(res.status == 417){
@@ -379,7 +382,7 @@ const AdminGioTiemChung = ({lichtiem})=>{
                                             {items.map((giotiem, idx)=>{
                                                 if(giotiem.injectDate === item){
                                                     return (
-                                                        <tr key={giotiem.id} className="transition-all">
+                                                        <tr key={`${giotiem.id}-${giotiem.limitPeople}-${giotiem.start}-${giotiem.end}`} className="transition-all">
                                                             <td className="px-4">
                                                                 <div className="d-flex align-items-center gap-2">
                                                                     <input id={'giobdupdate'+giotiem.id} type='time' defaultValue={giotiem.start} className="form-control form-control-sm text-center bg-light border-0 py-1" style={{width: '110px'}}/>

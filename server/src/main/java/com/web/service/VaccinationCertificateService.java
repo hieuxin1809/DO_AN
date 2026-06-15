@@ -114,13 +114,15 @@ public class VaccinationCertificateService {
         if (cs.getNurse()  != null) cert.setNurseName(cs.getNurse().getFullName());
 
         /* ─── Thời gian ─── */
-        cert.setInjectionDate(cs.getCompletedDate() != null ? cs.getCompletedDate() : new Timestamp(System.currentTimeMillis()));
-        cert.setIssuedDate(new Timestamp(System.currentTimeMillis()));
+        Timestamp injDate = cs.getCompletedDate() != null ? cs.getCompletedDate() : new Timestamp(System.currentTimeMillis());
+        cert.setInjectionDate(new Timestamp((injDate.getTime() / 1000L) * 1000L));
+        
+        cert.setIssuedDate(new Timestamp((System.currentTimeMillis() / 1000L) * 1000L));
 
         cert.setCustomerScheduleId(customerScheduleId);
         cert.setRevoked(false);
         cert.setFrozen(true);     // immutable từ thời điểm cấp
-        cert.setFrozenDate(new Timestamp(System.currentTimeMillis()));
+        cert.setFrozenDate(new Timestamp((System.currentTimeMillis() / 1000L) * 1000L));
 
         // Sinh serialNo TRƯỚC khi save (vì cột NOT NULL).
         // Retry tối đa 5 lần phòng trường hợp trùng do race condition.

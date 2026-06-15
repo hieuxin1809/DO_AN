@@ -11,15 +11,24 @@ import org.springframework.stereotype.Service;
 import java.sql.Timestamp;
 import java.util.List;
 
+/**
+ * Service quản lý danh mục nhà sản xuất vaccine.
+ */
 @Service
 public class ManufacturerService {
     @Autowired
     private ManufacturerRepository manufacturerRepository;
 
+    /**
+     * Lấy toàn bộ danh sách nhà sản xuất vaccine.
+     */
     public List<Manufacturer> getAll() {
         return manufacturerRepository.findAll();
     }
 
+    /**
+     * Tạo mới nhà sản xuất vaccine (validate tên và quốc gia, tự động điền ngày tạo).
+     */
     public Manufacturer create(Manufacturer request) {
         if (StringUtils.isBlank(request.getName())) {
             throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Tên nhà sản xuất không được để trống");

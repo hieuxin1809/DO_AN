@@ -253,6 +253,7 @@ function XacNhanDangky() {
 
     function vnpayClick()  { document.getElementById('paytype-vnpay').click(); }
     function paypalClick() { document.getElementById('paytype-paypal').click(); }
+    function paylaterClick() { document.getElementById('paytype-paylater').click(); }
 
     function getPayload(/* event */) {
         if (!patientInfo) {
@@ -292,12 +293,33 @@ function XacNhanDangky() {
         if (!window.confirm('Xác nhận đăng ký tiêm')) return;
 
         const paytype = event.target.elements.paytype.value;
-        if (paytype !== 'paypal' && paytype !== 'vnpay') {
+        if (paytype !== 'paypal' && paytype !== 'vnpay' && paytype !== 'paylater') {
             toast.warning('Vui lòng chọn hình thức thanh toán!');
             return;
         }
 
         const payload = getPayload(event);
+
+        if (paytype === 'paylater') {
+            const res = await postMethodPayload('/api/customer-schedule/customer/create-not-pay', payload);
+            if (res.status < 300) {
+                try { sessionStorage.removeItem('patientInfo_' + vaccineTime.id); } catch(e){}
+                Swal.fire({
+                    title: 'Đăng ký thành công! 🎉',
+                    text:  'Lịch hẹn của bạn đã được ghi nhận. Vui lòng thanh toán tại trung tâm khi đến tiêm.',
+                    icon:  'success',
+                    preConfirm: () => { window.location.href = '/tai-khoan#lichtiem'; },
+                });
+            } else {
+                let msg = 'Đăng ký thất bại';
+                try {
+                    const result = await res.json();
+                    msg = result.defaultMessage || msg;
+                } catch (_) {}
+                toast.error(msg);
+            }
+            return;
+        }
 
         /* Reserve slot trước khi mở payment */
         const reserveRes = await postMethodPayload('/api/customer-schedule/customer/reserve', payload);
@@ -561,12 +583,22 @@ function XacNhanDangky() {
                                             title="Thanh toán qua VNPay"
                                             icon={<img src={vnpay} alt="VNPay" style={{ height:'28px', objectFit:'contain' }} />}
                                         />
+                                        {/* Pay later card */}
+                                        <PaymentMethodCard
+                                            onClick={paylaterClick}
+                                            inputId="paytype-paylater" value="paylater"
+                                            title="Thanh toán sau tại trung tâm"
+                                            subtitle="Đóng tiền mặt/quẹt thẻ khi đến tiêm"
+                                            icon={(
+                                                <span style={{ fontSize: '24px' }}>🏦</span>
+                                            )}
+                                        />
                                     </div>
                                     <div style={{
                                         padding:'10px 22px 16px', fontSize:'12px', color:T2,
                                         background:'#fafbfc', borderTop:`1px solid ${B}`,
                                     }}>
-                                        💳 <strong>Lưu ý:</strong> Bạn cần thanh toán ngay khi đăng ký. Hệ thống không hỗ trợ thanh toán sau.
+                                        ℹ️ <strong>Lưu ý:</strong> Với hình thức <strong>Thanh toán sau tại trung tâm</strong>, bạn vui lòng thanh toán bằng tiền mặt hoặc quẹt thẻ khi đến ngày tiêm chủng.
                                     </div>
                                 </div>
 

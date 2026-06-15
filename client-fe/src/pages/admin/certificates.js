@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCertificate, faSearch, faX, faEye, faBan, faCheckCircle,
   faTimesCircle, faFileLines, faIdCard, faSyringe, faHospital,
-  faCalendarDays, faUser, faDownload,
+  faCalendarDays, faUser, faDownload, faKey, faSync,
 } from '@fortawesome/free-solid-svg-icons';
 import { downloadCertificatePdf } from '../../services/certificatePdf';
 
@@ -204,6 +204,51 @@ const AdminCertificates = () => {
     finally { setRevoking(false); }
   };
 
+  const triggerRehash = async (id) => {
+    try {
+      const res = await authFetch(`/api/certificate/admin/rehash/${id}`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.defaultMessage || 'Lỗi không xác định');
+      }
+      toast.success('Đã cập nhật lại chữ ký số (Rehash) thành công!');
+      const updated = await res.json();
+      setDetail(updated);
+      load();
+    } catch (e) {
+      console.error(e);
+      toast.error('Cập nhật chữ ký số thất bại: ' + e.message);
+    }
+  };
+
+  const handleRehashLegacy = async () => {
+    Swal.fire({
+      title: 'Xác nhận sửa lỗi chữ ký?',
+      text: 'Hệ thống sẽ kiểm tra toàn bộ giấy chứng nhận và tự động tính lại chữ ký số (rehash) cho những giấy bị lỗi do lệch mili-giây.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Đồng ý',
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: PRIMARY,
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const res = await authFetch('/api/certificate/admin/rehash-legacy', {
+            method: 'POST',
+          });
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          Swal.fire('Thành công', `Đã sửa lỗi chữ ký cho ${data.rehashed} giấy chứng nhận legacy!`, 'success');
+          load();
+        } catch {
+          toast.error('Có lỗi xảy ra khi rehash legacy');
+        }
+      }
+    });
+  };
+
   const totalPages = Math.ceil(total / size) || 1;
 
   return (
@@ -211,19 +256,30 @@ const AdminCertificates = () => {
       <style dangerouslySetInnerHTML={{ __html: `.swal2-container { z-index: 100000 !important; }` }} />
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
-        <div style={{ width: 48, height: 48, borderRadius: 14,
-          background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 4px 14px rgba(42,56,143,.3)' }}>
-          <FontAwesomeIcon icon={faCertificate} style={{ color: '#fff', fontSize: 20 }} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Quản lý giấy chứng nhận tiêm chủng</h2>
-          <div style={{ fontSize: 13, color: TEXT_2 }}>
-            Tổng {total} giấy · {stats.totalActive} hợp lệ · {stats.totalRevoked} đã thu hồi
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14, marginBottom: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14,
+            background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 14px rgba(42,56,143,.3)' }}>
+            <FontAwesomeIcon icon={faCertificate} style={{ color: '#fff', fontSize: 20 }} />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Quản lý giấy chứng nhận tiêm chủng</h2>
+            <div style={{ fontSize: 13, color: TEXT_2 }}>
+              Tổng {total} giấy · {stats.totalActive} hợp lệ · {stats.totalRevoked} đã thu hồi
+            </div>
           </div>
         </div>
+        <button onClick={handleRehashLegacy} style={{
+          padding: '8px 16px', borderRadius: 9, border: 'none',
+          background: `linear-gradient(135deg, ${WARNING}, #f59e0b)`,
+          color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6,
+          boxShadow: '0 2px 10px rgba(245,158,11,.3)'
+        }}>
+          <FontAwesomeIcon icon={faSync} /> Sửa lỗi chữ ký hàng loạt
+        </button>
       </div>
 
       {/* ── Filter bar ── */}
@@ -407,8 +463,20 @@ const AdminCertificates = () => {
             </DetailSection>
 
             {/* Nút tải PDF ở cuối modal */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end',
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10,
               borderTop: `1px solid ${BORDER}`, paddingTop: 16, marginTop: 4 }}>
+              <button onClick={() => triggerRehash(detail.id)}
+                style={{
+                  padding: '10px 18px', borderRadius: 10, border: `1.5px solid ${WARNING}`,
+                  background: 'transparent',
+                  color: WARNING, fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = WARNING; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = WARNING; }}
+              >
+                <FontAwesomeIcon icon={faKey} /> Sửa chữ ký (Rehash)
+              </button>
               <button onClick={() => handleDownloadPdf(detail)}
                 style={{
                   padding: '10px 22px', borderRadius: 10, border: 'none',

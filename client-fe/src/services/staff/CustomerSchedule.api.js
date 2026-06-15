@@ -43,6 +43,14 @@ export class CustomerScheduleApi {
     });
   };
 
+  static updatePaymentStatus = (id, isAdmin) => {
+    const rolePath = isAdmin ? "admin" : "staff";
+    return axios({
+      method: "POST",
+      url: `/api/customer-schedule/${rolePath}/update-payment-status?id=${id}`,
+    });
+  };
+
 //   static sendRefundEmail = (id) => {
 //     return axios({
 //         method: "POST",

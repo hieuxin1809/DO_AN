@@ -66,6 +66,8 @@ function ModalOverlay({ open, onClose, title, children, footer, size = 620 }) {
 
 const CustomerSchedule = () => {
   const [modalOpen,  setModalOpen]  = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduleItem, setRescheduleItem] = useState(null);
   const [formHandle, setFormHandle] = useState({});
   const [total,      setTotal]      = useState(0);
   const [curPage,    setCurPage]    = useState(1);
@@ -185,6 +187,70 @@ const CustomerSchedule = () => {
     CustomerScheduleApi.approveCustomerSchedule({ customerScheduleId: id, status })
       .then(() => { loadData(formSearch); AppNotification.success(status === 'confirmed' ? 'Duyệt thành công' : status === 'injected' ? 'Xác nhận tiêm xong' : 'Từ chối thành công'); })
       .catch(err => { const msg = err.response?.data?.defaultMessage; if (msg) AppNotification.error(msg); });
+  };
+
+  const handleConfirmPayment = (id) => {
+    if (!window.confirm('Xác nhận khách hàng đã thanh toán trực tiếp tại quầy?')) return;
+    CustomerScheduleApi.updatePaymentStatus(id, isAdmin)
+      .then(() => {
+        AppNotification.success('Xác nhận thanh toán thành công');
+        loadData(formSearch);
+      })
+      .catch(err => {
+        const msg = err.response?.data?.defaultMessage || 'Xác nhận thanh toán thất bại';
+        AppNotification.error(msg);
+      });
+  };
+
+  const handleOpenReschedule = async (item) => {
+    setRescheduleItem(item);
+    setRescheduleOpen(true);
+    const schId = item.vaccineScheduleTime?.vaccineSchedule?.id;
+    if (schId) {
+      setSelectedSchedule(item.vaccineScheduleTime.vaccineSchedule);
+      setSelectedDate(null);
+      setSelectedTime(null);
+      setAvailableDates([]);
+      setAvailableTimes([]);
+      try {
+        const res = await getMethod(`/api/vaccine-schedule-time/public/find-date-by-vaccine-schedule?idSchedule=${schId}`);
+        if (res.ok) {
+          const dates = await res.json();
+          setAvailableDates(dates || []);
+        } else {
+          AppNotification.error('Không tải được ngày tiêm');
+        }
+      } catch {
+        AppNotification.error('Không tải được ngày tiêm');
+      }
+    } else {
+      AppNotification.error('Lịch tiêm không hợp lệ');
+    }
+  };
+
+  const handleRescheduleSubmit = async () => {
+    if (!selectedTime) {
+      AppNotification.warning('Vui lòng chọn giờ tiêm mới');
+      return;
+    }
+    try {
+      const res = await postMethodPayload(`/api/customer-schedule/customer/change-schedule?id=${rescheduleItem.id}&timeId=${selectedTime.id}`, {});
+      if (res.ok) {
+        AppNotification.success('Đổi lịch hộ thành công');
+        setRescheduleOpen(false);
+        setRescheduleItem(null);
+        loadData(formSearch);
+      } else {
+        let msg = 'Đổi lịch thất bại';
+        try {
+          const j = await res.json();
+          msg = j.defaultMessage || msg;
+        } catch {}
+        AppNotification.error(msg);
+      }
+    } catch {
+      AppNotification.error('Lỗi kết nối khi đổi lịch');
+    }
   };
 
   const handleInput = (name, value) => {
@@ -372,6 +438,26 @@ const CustomerSchedule = () => {
                           ⏳ Chờ bác sĩ tiêm
                         </span>
                       )}
+                      {!item.payStatus && item.status !== 'cancelled' && (
+                        <button onClick={() => handleConfirmPayment(item.id)} title="Xác nhận đã thanh toán tại quầy" style={{
+                          width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          border: `1.5px solid ${W}22`, background: `${W}11`, color: W, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
+                        }}
+                          onMouseEnter={e => { e.currentTarget.style.background = W; e.currentTarget.style.color = '#fff'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = `${W}11`; e.currentTarget.style.color = W; }}>
+                          💵
+                        </button>
+                      )}
+                      {(item.status === 'pending' || item.status === 'confirmed' || item.status === 'cancelled' || item.status === 'not_injected') && (
+                        <button onClick={() => handleOpenReschedule(item)} title="Đổi lịch hộ" style={{
+                          width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          border: `1.5px solid ${A}22`, background: `${A}11`, color: A, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
+                        }}
+                          onMouseEnter={e => { e.currentTarget.style.background = A; e.currentTarget.style.color = '#fff'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = `${A}11`; e.currentTarget.style.color = A; }}>
+                          🔄
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -472,6 +558,66 @@ const CustomerSchedule = () => {
               })}
             </div>
           </Field>
+        )}
+      </ModalOverlay>
+
+      {/* ── Reschedule Modal (Đổi lịch hộ) ── */}
+      <ModalOverlay open={rescheduleOpen} onClose={() => { setRescheduleOpen(false); setRescheduleItem(null); }} title="Đổi lịch tiêm hộ khách"
+        footer={<>
+          <button onClick={() => { setRescheduleOpen(false); setRescheduleItem(null); }} style={{
+            padding: '9px 22px', borderRadius: 9, border: `1.5px solid ${B}`,
+            background: '#fff', color: T2, fontWeight: 700, cursor: 'pointer', fontSize: 14,
+          }}>Hủy</button>
+          <button onClick={handleRescheduleSubmit} disabled={!selectedTime} style={{
+            padding: '9px 22px', borderRadius: 9, border: 'none', cursor: 'pointer',
+            background: `linear-gradient(135deg,${P},${A})`, color: '#fff', fontWeight: 700, fontSize: 14,
+          }}>Xác nhận đổi</button>
+        </>}>
+        {rescheduleItem && (
+          <div>
+            <div style={{ marginBottom: 12, fontSize: 13.5, color: T2 }}>
+              Đang đổi lịch cho khách hàng: <strong style={{ color: T }}>{rescheduleItem.fullName}</strong>
+            </div>
+            <div style={{ marginBottom: 16, fontSize: 13.5, color: T2 }}>
+              Vaccine: <strong style={{ color: T }}>{rescheduleItem.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name}</strong>
+            </div>
+            
+            {availableDates.length > 0 ? (
+              <Field label="Chọn ngày tiêm mới" required>
+                <select style={{ ...inpStyle(false), cursor: 'pointer' }}
+                  value={selectedDate || ''} onChange={e => handleSelectDate(e.target.value)}>
+                  <option value="">-- Chọn ngày tiêm --</option>
+                  {availableDates.map(d => <option key={d} value={d}>{dayjs(d).format('DD/MM/YYYY')}</option>)}
+                </select>
+              </Field>
+            ) : (
+              <div style={{ color: D, fontSize: 13 }}>Lịch tiêm này hiện không có ngày tiêm trống nào.</div>
+            )}
+
+            {availableTimes.length > 0 && (
+              <Field label="Chọn giờ tiêm mới" required>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {availableTimes.map(t => {
+                    const isFull = t.quantity >= t.limitPeople;
+                    const isSel  = selectedTime?.id === t.id;
+                    return (
+                      <div key={t.id} onClick={() => !isFull && handleSelectTime(t.id)} style={{
+                        padding: '8px 14px', borderRadius: 9, cursor: isFull ? 'not-allowed' : 'pointer',
+                        border: `2px solid ${isSel ? P : isFull ? B : B}`,
+                        background: isSel ? `rgba(42,56,143,.08)` : isFull ? '#f9fafb' : '#fff',
+                        color: isFull ? T2 : T, fontSize: 13, userSelect: 'none', transition: 'all .15s',
+                      }}>
+                        <div style={{ fontWeight: 700 }}>{t.start?.slice(0,5)} – {t.end?.slice(0,5)}</div>
+                        <div style={{ fontSize: 11, color: isFull ? D : S, marginTop: 2 }}>
+                          {t.quantity}/{t.limitPeople} chỗ
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Field>
+            )}
+          </div>
         )}
       </ModalOverlay>
     </div>

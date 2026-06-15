@@ -16,21 +16,33 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * Service quản lý thông tin hồ sơ của Bác sĩ.
+ */
 @Component
 public class DoctorService {
 
     @Autowired
     private DoctorRepository doctorRepository;
 
+    /**
+     * Lấy toàn bộ danh sách bác sĩ.
+     */
     public List<Doctor> findAll(){
         return doctorRepository.findAll();
     }
 
+    /**
+     * Tìm kiếm bác sĩ theo từ khóa và phân trang.
+     */
     public Page<DoctorDTO> getDoctors(String q, Pageable pageable){
         Page<Doctor> doctors = doctorRepository.getDoctor(q, pageable);
         return doctors.map(this::mapToDTO);
     }
 
+    /**
+     * Xoá tài khoản/thông tin bác sĩ theo ID.
+     */
     public void deleteDoctor(Long id){
         Optional<Doctor> doctor = doctorRepository.findById(id);
         if(doctor.isPresent()){
@@ -40,6 +52,9 @@ public class DoctorService {
         }
     }
 
+    /**
+     * Cập nhật thông tin bác sĩ (họ tên, avatar, mô tả, chuyên môn, số năm kinh nghiệm).
+     */
     public DoctorDTO updateDoctor(Long id, Doctor doctorUpdate){
         Optional<Doctor> doctorExist = doctorRepository.findById(id);
 

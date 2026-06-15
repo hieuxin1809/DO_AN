@@ -102,6 +102,7 @@ export default function ScreeningModal({ open, target, onClose, onSuccess }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <style dangerouslySetInnerHTML={{ __html: `.swal2-container { z-index: 100000 !important; }` }} />
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)' }}
         onClick={saving ? null : onClose} />
       <div style={{

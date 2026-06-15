@@ -37,6 +37,9 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 @Service
+/**
+ * Service quan ly ton kho va xuat nhap kho vaccine.
+ */
 public class VaccineInventoryService {
     private final VaccineRepository vaccineRepository;
     private final VaccineInventoryRepository vaccineInventoryRepository;
@@ -52,7 +55,7 @@ public class VaccineInventoryService {
         Pageable pageable = PageRequest.of(requestBody.getPage() - 1, requestBody.getLimit());
 
         Page<VaccineInventory> vaccinePage = vaccineInventoryRepository.findAll(
-                specificationVaccineInventoryList(requestBody.getCenterId()), pageable);
+                specificationVaccineInventoryList(requestBody.getCenterId(), requestBody.getVaccineId(), requestBody.getImportDate()), pageable);
         List<ListVaccineInventoryResponse> vaccines = vaccinePage.getContent().stream().map(e
                 -> ListVaccineInventoryResponse.builder()
                 .id(e.getId())
@@ -267,12 +270,26 @@ public class VaccineInventoryService {
         }
     }
 
-    public Specification<VaccineInventory> specificationVaccineInventoryList(Long centerId) {
+    public Specification<VaccineInventory> specificationVaccineInventoryList(Long centerId, Long vaccineId, String importDate) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.notEqual(root.get("status"), "DELETE"));
             if (centerId != null) {
                 predicates.add(criteriaBuilder.equal(root.get("center").get("id"), centerId));
+            }
+            if (vaccineId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("vaccine").get("id"), vaccineId));
+            }
+            if (importDate != null && !importDate.trim().isEmpty()) {
+                try {
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                    java.util.Date parsedDate = sdf.parse(importDate);
+                    Timestamp startOfDay = new Timestamp(parsedDate.getTime());
+                    Timestamp endOfDay = new Timestamp(parsedDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+                    predicates.add(criteriaBuilder.between(root.get("createdDate"), startOfDay, endOfDay));
+                } catch (Exception e) {
+                    // Ignore date format error
+                }
             }
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };

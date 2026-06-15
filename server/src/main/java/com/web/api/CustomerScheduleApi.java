@@ -156,6 +156,13 @@ public class CustomerScheduleApi {
         return new ResponseEntity<>(customerScheduleService.updateCustomerSchedule(request),HttpStatus.OK);
     }
 
+    // Admin / Nhân viên cập nhật trạng thái thanh toán trực tiếp tại quầy
+    @PostMapping({"/admin/update-payment-status", "/staff/update-payment-status"})
+    public ResponseEntity<?> updatePaymentStatus(@RequestParam Long id) {
+        customerScheduleService.updatePaymentStatus(id);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
     // Nhân viên phân công bác sĩ / y tá cho lịch tiêm
     @PostMapping("/staff/assign-doctor-nurse")
     public ResponseEntity<?> assignDoctorNurse(@RequestBody AssignDoctorNurseRequest request) {

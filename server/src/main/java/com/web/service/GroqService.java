@@ -64,8 +64,13 @@ public class GroqService {
     private static final String SYSTEM_PROMPT =
         // ── IDENTITY ────────────────────────────────────────────────────────
         "Bạn là iVax — trợ lý AI của iVaccine, hệ thống đặt lịch tiêm chủng trực tuyến tại Việt Nam. " +
-        "Luôn trả lời bằng tiếng Việt, thân thiện, ngắn gọn, đúng trọng tâm. Dùng gạch đầu dòng khi liệt kê. " +
-        "Không dùng markdown heading (##).\n\n" +
+        "Luôn trả lời bằng tiếng Việt, thân thiện, ngắn gọn, đúng trọng tâm.\n\n" +
+        "=== QUY TẮC TRÌNH BÀY ===\n" +
+        "- Tuyệt đối KHÔNG viết danh sách hay liệt kê dưới dạng một đoạn văn dài ngăn cách bằng dấu phẩy.\n" +
+        "- Luôn sử dụng xuống dòng (ký tự \\n) và dấu gạch đầu dòng (\\n- ) để liệt kê danh sách vaccine, trung tâm, lịch hẹn, hoặc bất kỳ thông tin nào có nhiều hơn 2 mục.\n" +
+        "- Mỗi mục trong danh sách phải nằm trên một dòng riêng biệt để người dùng dễ đọc.\n" +
+        "- In đậm (sử dụng **) các thông tin quan trọng như tên vaccine hoặc trạng thái.\n" +
+        "- Không dùng markdown heading (## hoặc ###).\n\n" +
 
         // ── TOOL CALLING ───────────────────────────────────────────────────
         "=== QUY TẮC DÙNG TOOL ===\n" +
@@ -350,19 +355,19 @@ public class GroqService {
     private Object executeTool(String name, Map<String, Object> args) {
         try {
             switch (name) {
-                case "listUpcomingSchedules":     return tool_listUpcomingSchedules(args);
-                case "searchVaccines":            return tool_searchVaccines(args);
+                case "listUpcomingSchedules":     return tool_listUpcomingSchedules(args); // lịch sắp tới
+                case "searchVaccines":            return tool_searchVaccines(args); // tìm kiếm vaccine
                 /* ── Phase 2 — public tools ── */
-                case "getVaccineDetails":         return tool_getVaccineDetails(args);
-                case "findCenters":               return tool_findCenters(args);
-                case "checkSlotsRemaining":       return tool_checkSlotsRemaining(args);
-                case "getVaccinesForAge":         return tool_getVaccinesForAge(args);
-                case "listVaccineTypes":          return tool_listVaccineTypes(args);
+                case "getVaccineDetails":         return tool_getVaccineDetails(args); // chi tiết vaccine của hệ thống
+                case "findCenters":               return tool_findCenters(args); // tìm trung tâm theo tên/địa chỉ
+                case "checkSlotsRemaining":       return tool_checkSlotsRemaining(args); // kiểm tra slot còn trống của khung giờ tiêm
+                case "getVaccinesForAge":         return tool_getVaccinesForAge(args); // vaccine phù hợp độ tuổi
+                case "listVaccineTypes":          return tool_listVaccineTypes(args); // liệt kê loại vaccine
                 /* ── Phase 3 — user-specific tools ── */
-                case "getMyUpcomingAppointments": return tool_getMyUpcomingAppointments(args);
-                case "getMyVaccinationHistory":   return tool_getMyVaccinationHistory(args);
-                case "getMyRecommendedNext":      return tool_getMyRecommendedNext(args);
-                case "getMyCertificates":         return tool_getMyCertificates(args);
+                case "getMyUpcomingAppointments": return tool_getMyUpcomingAppointments(args); // lịch tiêm sắp tới của tôi
+                case "getMyVaccinationHistory":   return tool_getMyVaccinationHistory(args); // lịch sử tiêm của tôi
+                case "getMyRecommendedNext":      return tool_getMyRecommendedNext(args); // gợi ý mũi tiếp theo của tôi
+                case "getMyCertificates":         return tool_getMyCertificates(args); // giấy chứng nhận của tôi
                 default:
                     return Map.of("error", "Tool '" + name + "' không tồn tại");
             }

@@ -10,7 +10,7 @@ const T2 = "#64748b";
 
 const NAV = [
   { href: "dashboard",     icon: "fa-home",        label: "Trang chủ" },
-  { href: "today-queue",   icon: "fa-calendar",    label: "Lịch tiêm hôm nay" },
+  { href: "today-queue",   icon: "fa-calendar",    label: "Lịch tiêm của tôi" },
   { href: "my-patients",   icon: "fa-users",       label: "Bệnh nhân của tôi" },
   { href: "chat",          icon: "fa-envelope",    label: "Tin nhắn" },
   { href: "reports",       icon: "fa-line-chart",  label: "Báo cáo cá nhân" },

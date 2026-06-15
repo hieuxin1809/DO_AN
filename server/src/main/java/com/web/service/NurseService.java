@@ -17,21 +17,33 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * Service quản lý thông tin hồ sơ của Y tá.
+ */
 @Component
 public class NurseService {
 
     @Autowired
     private NurseRepository nurseRepository;
 
+    /**
+     * Lấy toàn bộ danh sách Y tá.
+     */
     public List<Nurse> findAll(){
         return nurseRepository.findAll();
     }
 
+    /**
+     * Tìm kiếm Y tá theo từ khóa và phân trang.
+     */
     public Page<NurseDTO> getNurse(String q, Pageable pageable){
         Page<Nurse> nurses = nurseRepository.getNurse(q, pageable);
         return nurses.map(this::mapToDTO);
     }
 
+    /**
+     * Xoá thông tin Y tá theo ID.
+     */
     public void deleteNurse(Long id){
         Optional<Nurse> nurse = nurseRepository.findById(id);
         if(nurse.isPresent()){
@@ -41,6 +53,9 @@ public class NurseService {
         }
     }
 
+    /**
+     * Cập nhật thông tin Y tá (họ tên, avatar, số năm kinh nghiệm, bằng cấp, mô tả).
+     */
     public NurseDTO updateNurse(Long id, Nurse nurseUpdate){
         Optional<Nurse> nurseExist = nurseRepository.findById(id);
 

@@ -13,4 +13,6 @@ public class ListVaccineInventoryRequest {
     private int page;
     private int limit;
     private Long centerId;
+    private Long vaccineId;
+    private String importDate;
 }

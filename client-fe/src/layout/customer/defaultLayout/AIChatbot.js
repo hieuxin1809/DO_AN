@@ -5,6 +5,34 @@ const STORAGE_KEY    = 'ivaccine_ai_chat_history';
 const SESSION_KEY    = 'ivaccine_ai_session_id';
 const defaultMessage = { text: 'Chào bạn, tôi là trợ lý y tế AI của iVaccine. Tôi có thể giúp gì cho bạn?', isBot: true };
 
+const formatMessageText = (text) => {
+    if (!text) return '';
+    let html = text;
+    // Escape HTML first to prevent XSS
+    html = html
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    
+    // Bold: **text** -> <strong>text</strong>
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Bullet points: \n- item -> <br/>• item
+    html = html.replace(/(?:\r?\n|^)\s*-\s+(.*?)(?=\r?\n|$)/g, '<br/>• $1');
+    
+    // Convert newlines to <br/>
+    html = html.replace(/\r?\n/g, '<br/>');
+    
+    // Remove duplicate <br/> if any start issues
+    if (html.startsWith('<br/>')) {
+        html = html.substring(5);
+    }
+    
+    return html;
+};
+
 /** Lấy hoặc tạo sessionId — giữ ngữ cảnh hội thoại với backend.
  *  Mỗi tab browser dùng cùng 1 sessionId cho đến khi user xoá chat. */
 const getSessionId = () => {
@@ -140,7 +168,7 @@ const AIChatbot = () => {
                             <div key={idx} className={`ai-message-row ${msg.isBot ? 'bot-row' : 'user-row'}`}>
                                 {msg.isBot && <div className="ai-avatar"><i className="fa fa-android"></i></div>}
                                 <div className={`ai-message-bubble ${msg.isBot ? 'bot-bubble' : 'user-bubble'}`}>
-                                    <div dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br/>') }} />
+                                    <div dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }} />
                                 </div>
                             </div>
                         ))}

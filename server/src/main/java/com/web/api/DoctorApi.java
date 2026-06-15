@@ -14,6 +14,8 @@ import com.web.repository.DoctorRepository;
 import com.web.service.DoctorService;
 import com.web.service.VaccinationCertificateService;
 import com.web.utils.UserUtils;
+import com.web.utils.MailService;
+import com.web.utils.EmailTemplateUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +49,9 @@ public class DoctorApi {
 
     @Autowired
     private VaccinationCertificateService certService;
+
+    @Autowired
+    private MailService mailService;
 
     @GetMapping("/public/find-all")
     public ResponseEntity<?> findAll(){
@@ -310,6 +315,21 @@ public class DoctorApi {
             cs.setStatusCustomerSchedule(StatusCustomerSchedule.not_injected);
             cs.setCompletedDate(new Timestamp(System.currentTimeMillis()));
             customerScheduleRepository.save(cs);
+            // Gửi email thông báo hoãn lịch tiêm
+            try {
+                String to = cs.getUser().getEmail();
+                String status = cs.getStatusCustomerSchedule().name();
+                String vaccineName = cs.getVaccineScheduleTime() != null
+                        && cs.getVaccineScheduleTime().getVaccineSchedule() != null
+                        ? cs.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getName()
+                        : "Vaccine";
+                String subject = "[iVaccine] Thông báo lịch tiêm bị hoãn";
+                String customerName = cs.getFullName() != null ? cs.getFullName() : "Khách hàng";
+                String html = EmailTemplateUtils.bookingStatusUpdate(customerName, vaccineName, status);
+                mailService.sendEmail(to, subject, html, false, true);
+            } catch (Exception e) {
+                System.err.println("[DoctorApi.screening] Lỗi gửi email hoãn tiêm: " + e.getMessage());
+            }
         } else {
             throw new MessageException("Decision không hợp lệ (inject hoặc defer)");
         }

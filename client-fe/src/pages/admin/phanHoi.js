@@ -5,18 +5,11 @@ import { getMethod } from '../../services/request';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCommentDots, faStar, faEye, faArrowsRotate,
-  faUserMd, faGlobe,
+  faUserMd, faSearch, faFilter, faX,
 } from '@fortawesome/free-solid-svg-icons';
 
-const P = '#2A388F', A = '#0ea5e9', S = '#10b981', W = '#f59e0b';
+const P = '#2A388F', A = '#0ea5e9', S = '#10b981', D = '#ef4444', W = '#f59e0b';
 const B = '#e2e8f0', T = '#1e293b', T2 = '#64748b';
-
-/* ── filter config ── */
-const TYPES = [
-  { key: 'all',     label: 'Tất cả',  icon: faGlobe,      color: P },
-  { key: 'general', label: 'Chung',   icon: faCommentDots,color: A },
-  { key: 'doctor',  label: 'Bác sĩ',  icon: faUserMd,     color: S },
-];
 
 /* ── Stars ── */
 function Stars({ rating, size = 14 }) {
@@ -74,7 +67,8 @@ function ModalOverlay({ open, onClose, title, children, footer, size = 600 }) {
 /* ════════════════════════════════════ */
 const AdminPhanHoi = () => {
   const [items,      setItems]      = useState([]);
-  const [filterType, setFilterType] = useState('all');
+  const [filterStar, setFilterStar] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading,    setLoading]    = useState(true);
   const [showDetail, setShowDetail] = useState(false);
   const [selected,   setSelected]   = useState(null);
@@ -91,14 +85,18 @@ const AdminPhanHoi = () => {
     finally { setLoading(false); }
   };
 
-  const filtered = filterType === 'all'
-    ? items
-    : items.filter(i => i.feedbackType === filterType);
+  const filtered = items.filter(item => {
+    if (filterStar !== 'all' && Number(item.rating) !== Number(filterStar)) return false;
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      const customerName = (item.customerSchedule?.fullName || '').toLowerCase();
+      const doctorName = (item.doctor?.fullName || '').toLowerCase();
+      if (!customerName.includes(term) && !doctorName.includes(term)) return false;
+    }
+    return true;
+  });
 
-  /* stat counts */
-  const counts = Object.fromEntries(
-    TYPES.map(t => [t.key, t.key === 'all' ? items.length : items.filter(i => i.feedbackType === t.key).length])
-  );
+
 
   /* avg rating */
   const avgRating = items.length
@@ -124,7 +122,7 @@ const AdminPhanHoi = () => {
           </div>
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: T }}>Phản hồi khách hàng</h2>
-            <div style={{ fontSize: 13, color: T2 }}>{items.length} phản hồi · Đánh giá TB: {avgRating} ⭐</div>
+            <div style={{ fontSize: 13, color: T2 }}>{items.length} phản hồi · Điểm đánh giá trung bình: {avgRating} ⭐</div>
           </div>
         </div>
         <button onClick={fetchFeedbacks} style={{
@@ -138,42 +136,51 @@ const AdminPhanHoi = () => {
         </button>
       </div>
 
-      {/* ── stat chips ── */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
-        {TYPES.map(t => (
-          <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 16px', background: '#fff', borderRadius: 10,
-            border: `1px solid ${B}`, boxShadow: '0 1px 4px rgba(0,0,0,.04)' }}>
-            <FontAwesomeIcon icon={t.icon} style={{ color: t.color, fontSize: 13 }} />
-            <span style={{ fontSize: 17, fontWeight: 800, color: t.color }}>{counts[t.key]}</span>
-            <span style={{ fontSize: 12.5, color: T2 }}>{t.label}</span>
-          </div>
-        ))}
-      </div>
 
-      {/* ── filter tabs ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
-        {TYPES.map(t => (
-          <button key={t.key} onClick={() => setFilterType(t.key)} style={{
-            padding: '7px 18px', borderRadius: 20, border: 'none', cursor: 'pointer',
-            fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6,
-            transition: 'all .15s',
-            background: filterType === t.key ? t.color : '#fff',
-            color: filterType === t.key ? '#fff' : T2,
-            boxShadow: filterType === t.key
-              ? `0 3px 10px ${t.color}55`
-              : '0 1px 3px rgba(0,0,0,.06)',
-            border: filterType === t.key ? 'none' : `1px solid ${B}`,
-          }}>
-            <FontAwesomeIcon icon={t.icon} />
-            {t.label}
-            <span style={{
-              fontSize: 11, padding: '1px 6px', borderRadius: 8, fontWeight: 800,
-              background: filterType === t.key ? 'rgba(255,255,255,.3)' : '#f1f5f9',
-              color: filterType === t.key ? '#fff' : T2,
-            }}>{counts[t.key]}</span>
+
+      {/* ── filter bar ── */}
+      <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', marginBottom: 18,
+        border: `1px solid ${B}`, boxShadow: '0 1px 6px rgba(0,0,0,.04)',
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+        {/* search */}
+        <div style={{ flex: 2, minWidth: 260, display: 'flex', alignItems: 'center', gap: 8,
+          border: `1.5px solid ${B}`, borderRadius: 10, padding: '8px 14px', background: '#fff' }}>
+          <FontAwesomeIcon icon={faSearch} style={{ color: T2, fontSize: 13 }} />
+          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Tìm theo tên khách hàng hoặc bác sĩ..."
+            style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13.5, color: T, background: 'transparent' }} />
+          {searchTerm && <button onClick={() => setSearchTerm('')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: T2 }}>
+            <FontAwesomeIcon icon={faX} />
+          </button>}
+        </div>
+
+        {/* star filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 160 }}>
+          <span style={{ fontSize: 13, color: T2, whiteSpace: 'nowrap' }}>Đánh giá:</span>
+          <select value={filterStar} onChange={e => setFilterStar(e.target.value)}
+            style={{ border: `1.5px solid ${B}`, borderRadius: 10, padding: '8px 12px',
+              fontSize: 13.5, color: T, outline: 'none', cursor: 'pointer', background: '#fff', flex: 1 }}>
+            <option value="all">Tất cả sao</option>
+            <option value="5">5 ⭐ (Xuất sắc)</option>
+            <option value="4">4 ⭐ (Tốt)</option>
+            <option value="3">3 ⭐ (Bình thường)</option>
+            <option value="2">2 ⭐ (Kém)</option>
+            <option value="1">1 ⭐ (Rất kém)</option>
+          </select>
+        </div>
+
+        {/* reset btn */}
+        {(filterStar !== 'all' || searchTerm.trim() !== '') && (
+          <button onClick={() => { setFilterStar('all'); setSearchTerm(''); }}
+            style={{ padding: '8px 16px', borderRadius: 10, border: `1.5px solid ${B}`,
+              background: '#fff', color: T2, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+              transition: 'all .15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = D; e.currentTarget.style.color = D; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = B; e.currentTarget.style.color = T2; }}>
+            Xóa bộ lọc
           </button>
-        ))}
+        )}
       </div>
 
       {/* ── table card ── */}
@@ -183,7 +190,7 @@ const AdminPhanHoi = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['#','Khách hàng','Đánh giá','Nội dung','Loại','Bác sĩ','Ngày tạo','Chi tiết'].map(h => (
+                {['#','Khách hàng','Đánh giá','Nội dung','Bác sĩ','Ngày tạo','Chi tiết'].map(h => (
                   <th key={h} style={{ padding: '12px 18px', textAlign: 'left', fontSize: 12,
                     fontWeight: 700, color: T2, textTransform: 'uppercase', letterSpacing: '.4px',
                     borderBottom: `1px solid ${B}`, whiteSpace: 'nowrap' }}>{h}</th>
@@ -192,9 +199,9 @@ const AdminPhanHoi = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
+                <tr><td colSpan={7} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có phản hồi nào</td></tr>
+                <tr><td colSpan={7} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có phản hồi nào</td></tr>
               ) : filtered.map((item, idx) => (
                 <tr key={item.id}
                   style={{ borderBottom: `1px solid ${B}`, transition: 'background .15s' }}
@@ -223,15 +230,6 @@ const AdminPhanHoi = () => {
                   <td style={{ padding: '13px 18px', color: T2, fontSize: 13,
                     maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.content || '—'}
-                  </td>
-                  <td style={{ padding: '13px 18px' }}>
-                    {item.feedbackType ? (
-                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                        background: `${typeColor[item.feedbackType] || T2}18`,
-                        color: typeColor[item.feedbackType] || T2 }}>
-                        {typeLabel[item.feedbackType] || item.feedbackType}
-                      </span>
-                    ) : <span style={{ color: T2 }}>—</span>}
                   </td>
                   <td style={{ padding: '13px 18px', fontSize: 13 }}>
                     {item.doctor?.fullName && (

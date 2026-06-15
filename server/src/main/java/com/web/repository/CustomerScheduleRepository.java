@@ -47,28 +47,28 @@ public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedu
     Integer countRegisByVaccine(Long vaccineId);
 
     /**
-     * Đếm số mũi đã tiêm thành công (confirmed) của 1 user cho 1 loại vaccine.
-     * Truyền enum qua @Param thay vì inline trong JPQL để tránh InvalidPathException.
+     * Đếm số mũi đã tiêm thành công của chính user (không tính người thân) cho 1 loại vaccine.
      */
     @Query("SELECT COUNT(c) FROM CustomerSchedule c " +
            "WHERE c.user.id = :userId " +
            "AND c.vaccineScheduleTime.vaccineSchedule.vaccine.id = :vaccineId " +
-           "AND c.statusCustomerSchedule = :status")
+           "AND c.statusCustomerSchedule IN :statuses " +
+           "AND (c.bookingForOther IS NULL OR c.bookingForOther = false)")
     Integer countCompletedDoses(@Param("userId") Long userId,
                                 @Param("vaccineId") Long vaccineId,
-                                @Param("status") StatusCustomerSchedule status);
+                                @Param("statuses") List<StatusCustomerSchedule> statuses);
 
     /**
-     * Lấy ngày tiêm của mũi cuối cùng đã confirmed.
-     * Truyền enum qua @Param thay vì inline trong JPQL.
+     * Lấy ngày tiêm của mũi cuối cùng đã tiêm thành công của chính user (không tính người thân).
      */
     @Query("SELECT MAX(c.vaccineScheduleTime.injectDate) FROM CustomerSchedule c " +
            "WHERE c.user.id = :userId " +
            "AND c.vaccineScheduleTime.vaccineSchedule.vaccine.id = :vaccineId " +
-           "AND c.statusCustomerSchedule = :status")
+           "AND c.statusCustomerSchedule IN :statuses " +
+           "AND (c.bookingForOther IS NULL OR c.bookingForOther = false)")
     java.sql.Date findLastInjectedDate(@Param("userId") Long userId,
                                        @Param("vaccineId") Long vaccineId,
-                                       @Param("status") StatusCustomerSchedule status);
+                                       @Param("statuses") List<StatusCustomerSchedule> statuses);
 
     Page<CustomerSchedule> findByDoctor_Id(Long doctorId, Pageable pageable);
 
@@ -90,4 +90,13 @@ public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedu
     @Query("SELECT c FROM CustomerSchedule c WHERE c.statusCustomerSchedule = :status AND c.createdDate < :cutoff")
     List<CustomerSchedule> findExpiredHolds(@Param("status") StatusCustomerSchedule status,
                                             @Param("cutoff") Timestamp cutoff);
+
+    @Query("SELECT c FROM CustomerSchedule c WHERE " +
+           "(c.statusCustomerSchedule = :confirmedStatus OR c.statusCustomerSchedule = :pendingStatus) " +
+           "AND c.vaccineScheduleTime.injectDate <= :yesterday")
+    List<CustomerSchedule> findPotentialMissedAppointments(
+            @Param("yesterday") java.sql.Date yesterday,
+            @Param("confirmedStatus") StatusCustomerSchedule confirmedStatus,
+            @Param("pendingStatus") StatusCustomerSchedule pendingStatus
+    );
 }

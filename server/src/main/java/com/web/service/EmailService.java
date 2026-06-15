@@ -5,14 +5,18 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+/**
+ * Service tiện ích hỗ trợ gửi email thông báo.
+ */
 @Service
 public class EmailService {
 
     @Autowired
     private JavaMailSender mailSender;
 
-
-
+    /**
+     * Gửi email thông báo tài khoản và lịch tiêm chủng mới.
+     */
     public void sendVaccinationScheduleNotification(String to, String customerName, String appointmentDate, String username, String password) {
         String subject = "Thông báo lịch tiêm chủng";
         String body = "Xin chào " + customerName + ",\n\n"

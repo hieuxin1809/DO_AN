@@ -169,23 +169,15 @@ public class ReminderService {
                 try {
                     // Đếm mũi đã tiêm thành công
                     Integer completed = customerScheduleRepo.countCompletedDoses(
-                            user.getId(), vaccine.getId(), StatusCustomerSchedule.injected);
+                            user.getId(), vaccine.getId(), List.of(StatusCustomerSchedule.injected, StatusCustomerSchedule.finished));
                     if (completed == null) completed = 0;
-                    // Cộng cả "finished"
-                    Integer finished = customerScheduleRepo.countCompletedDoses(
-                            user.getId(), vaccine.getId(), StatusCustomerSchedule.finished);
-                    if (finished != null) completed += finished;
 
                     // Đã tiêm đủ mũi hoặc chưa tiêm mũi nào → bỏ qua
                     if (completed <= 0 || completed >= vaccine.getMaxDose()) continue;
 
                     // Lấy ngày tiêm gần nhất
                     Date lastDate = customerScheduleRepo.findLastInjectedDate(
-                            user.getId(), vaccine.getId(), StatusCustomerSchedule.injected);
-                    if (lastDate == null) {
-                        lastDate = customerScheduleRepo.findLastInjectedDate(
-                                user.getId(), vaccine.getId(), StatusCustomerSchedule.finished);
-                    }
+                            user.getId(), vaccine.getId(), List.of(StatusCustomerSchedule.injected, StatusCustomerSchedule.finished));
                     if (lastDate == null) continue;
 
                     LocalDate lastLd = lastDate.toLocalDate();
@@ -253,6 +245,7 @@ public class ReminderService {
         return customerScheduleRepo.findAll().stream()
                 .filter(cs -> cs.getStatusCustomerSchedule() == StatusCustomerSchedule.injected
                           || cs.getStatusCustomerSchedule() == StatusCustomerSchedule.finished)
+                .filter(cs -> !Boolean.TRUE.equals(cs.getBookingForOther()))
                 .filter(cs -> {
                     try {
                         return cs.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getId().equals(vaccineId);

@@ -70,8 +70,24 @@ const AdminLichTiemChung = () => {
   };
 
   const fmtDate = (s) => s ? new Date(s).toLocaleDateString('vi-VN') : '—';
-  const isActive = (start, end) => {
-    const now = new Date(); return new Date(start) <= now && now <= new Date(end);
+  const getStatus = (start, end) => {
+    if (!start || !end) return { text: '—', color: T2, bg: 'rgba(100,116,139,.1)' };
+    const getLocalDateString = (d) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    const todayStr = getLocalDateString(new Date());
+    const startStr = start.substring(0, 10);
+    const endStr = end.substring(0, 10);
+    if (todayStr < startStr) {
+      return { text: 'Sắp diễn ra', color: W, bg: 'rgba(245,158,11,.1)' };
+    } else if (todayStr > endStr) {
+      return { text: 'Đã kết thúc', color: D, bg: 'rgba(239,68,68,.1)' };
+    } else {
+      return { text: 'Đang diễn ra', color: S, bg: 'rgba(16,185,129,.1)' };
+    }
   };
 
   const IconBtn = ({ onClick, color, icon, title, btnProps = {} }) => (
@@ -183,7 +199,7 @@ const AdminLichTiemChung = () => {
               ) : items.length === 0 ? (
                 <tr><td colSpan={10} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có lịch tiêm nào</td></tr>
               ) : items.map((item, idx) => {
-                const active = isActive(item.startDate, item.endDate);
+                const status = getStatus(item.startDate, item.endDate);
                 return (
                   <tr key={item.id}
                     style={{ borderBottom: `1px solid ${B}`, transition: 'background .15s' }}
@@ -210,9 +226,9 @@ const AdminLichTiemChung = () => {
                     </td>
                     <td style={{ padding: '12px 14px' }}>
                       <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
-                        background: active ? 'rgba(16,185,129,.1)' : 'rgba(100,116,139,.1)',
-                        color: active ? S : T2 }}>
-                        {active ? 'Đang diễn ra' : 'Không hoạt động'}
+                        background: status.bg,
+                        color: status.color }}>
+                        {status.text}
                       </span>
                     </td>
                     <td style={{ padding: '12px 14px' }}>

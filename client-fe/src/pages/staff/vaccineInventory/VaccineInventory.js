@@ -41,6 +41,8 @@ const VaccineInventory = () => {
   const [currentPage, setCurrentPage]         = useState(1);
   const [pageSize, setPageSize]               = useState(10);
   const [filterCenterId, setFilterCenterId]   = useState(null);
+  const [filterVaccineId, setFilterVaccineId] = useState(null);
+  const [filterImportDate, setFilterImportDate] = useState("");
 
   /* ── centers ── */
   const [centers, setCenters]                 = useState([]);
@@ -59,17 +61,27 @@ const VaccineInventory = () => {
   const [xuatError, setXuatError]             = useState("");
   const [xuatSaving, setXuatSaving]           = useState(false);
 
-  /* ── fetch centers (once) ── */
+  /* ── fetch centers and vaccines (once) ── */
   useEffect(() => {
     axios.get("/api/center/public/find-all")
       .then(res => setCenters(res.data || []))
+      .catch(console.error);
+
+    VaccineApi.vaccines({ page: 1, limit: 999 })
+      .then(res => setVaccineOptions(res.data.content || []))
       .catch(console.error);
   }, []);
 
   /* ── fetch inventory ── */
   useEffect(() => {
-    fetchInventory({ page: currentPage, limit: pageSize, centerId: filterCenterId });
-  }, [currentPage, pageSize, filterCenterId]); // eslint-disable-line
+    fetchInventory({
+      page: currentPage,
+      limit: pageSize,
+      centerId: filterCenterId,
+      vaccineId: filterVaccineId,
+      importDate: filterImportDate
+    });
+  }, [currentPage, pageSize, filterCenterId, filterVaccineId, filterImportDate]); // eslint-disable-line
 
   const fetchInventory = async (params) => {
     setLoading(true);
@@ -215,6 +227,19 @@ const VaccineInventory = () => {
       ) : <span style={{ color: TEXT_2 }}>—</span>,
     },
     {
+      title: "Tổng nhập lúc đầu", key: "totalImported", align: "center",
+      render: (_, r) => {
+        const qty = r?.quantity ?? 0;
+        const exp = r?.exportedQuantity ?? 0;
+        return (
+          <div>
+            <span style={{ fontWeight: 700, fontSize: 15, color: TEXT }}>{qty + exp}</span>
+            <div style={{ fontSize: 11, color: TEXT_2, marginTop: 2 }}>nhập kho</div>
+          </div>
+        );
+      }
+    },
+    {
       title: "Tồn kho vật lý", dataIndex: "quantity", key: "quantity", align: "center",
       sorter: (a, b) => a.quantity - b.quantity,
       render: (qty) => {
@@ -266,32 +291,41 @@ const VaccineInventory = () => {
     },
     {
       title: "Hành động", key: "action", align: "center", width: 180,
-      render: (_, record) => (
-        <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
-          <Button
-            title="Xuất kho"
-            style={{ borderColor: SUCCESS, color: SUCCESS, fontWeight: 600 }}
-            onClick={() => {
-              setXuatQty(null); setXuatError("");
-              setXuatModal({
-                open: true,
-                name: record.vaccine?.nameVaccine || record.vaccine?.name,
-                centerId: record.center?.id || null,
-                inventoryId: record.id,
-              });
-            }}
-          >
-            <FontAwesomeIcon icon={faPlus} style={{ marginRight: 5 }} />Xuất
-          </Button>
-          <Popconfirm
-            title="Xóa lô vaccine này?" description="Hành động này không thể hoàn tác."
-            onConfirm={() => handleDelete(record.id)} okText="Xóa" cancelText="Hủy"
-            okButtonProps={{ danger: true }}
-          >
-            <Button danger title="Xóa"><FontAwesomeIcon icon={faRemove} /></Button>
-          </Popconfirm>
-        </div>
-      ),
+      render: (_, record) => {
+        const expired = record.expirationDate ? dayjs(record.expirationDate).isBefore(dayjs(), "day") : false;
+        return (
+          <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+            <Button
+              title={expired ? "Lô vaccine đã hết hạn" : "Xuất kho"}
+              disabled={expired}
+              style={{
+                borderColor: expired ? BORDER : SUCCESS,
+                color: expired ? TEXT_2 : SUCCESS,
+                fontWeight: 600,
+                cursor: expired ? "not-allowed" : "pointer"
+              }}
+              onClick={() => {
+                setXuatQty(null); setXuatError("");
+                setXuatModal({
+                  open: true,
+                  name: record.vaccine?.nameVaccine || record.vaccine?.name,
+                  centerId: record.center?.id || null,
+                  inventoryId: record.id,
+                });
+              }}
+            >
+              <FontAwesomeIcon icon={faPlus} style={{ marginRight: 5 }} />Xuất
+            </Button>
+            <Popconfirm
+              title="Xóa lô vaccine này?" description="Hành động này không thể hoàn tác."
+              onConfirm={() => handleDelete(record.id)} okText="Xóa" cancelText="Hủy"
+              okButtonProps={{ danger: true }}
+            >
+              <Button danger title="Xóa"><FontAwesomeIcon icon={faRemove} /></Button>
+            </Popconfirm>
+          </div>
+        );
+      }
     },
   ];
 
@@ -341,18 +375,53 @@ const VaccineInventory = () => {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <FontAwesomeIcon icon={faFilter} style={{ color: TEXT_2, fontSize: 13 }} />
           <span style={{ fontSize: 13, fontWeight: 700, color: TEXT_2, textTransform: "uppercase",
-            letterSpacing: "0.4px" }}>Lọc theo trung tâm</span>
+            letterSpacing: "0.4px" }}>Bộ lọc:</span>
         </div>
-        <Select
-          allowClear
-          placeholder="Tất cả trung tâm"
-          value={filterCenterId}
-          onChange={(val) => { setFilterCenterId(val || null); setCurrentPage(1); }}
-          style={{ width: 280 }}
-          options={centers.map(c => ({ value: c.id, label: c.centerName }))}
-        />
-        {filterCenterId && (
-          <button onClick={() => { setFilterCenterId(null); setCurrentPage(1); }} style={{
+
+        {/* center filter */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 13, color: TEXT_2, whiteSpace: "nowrap" }}>Trung tâm:</span>
+          <Select
+            allowClear
+            placeholder="Tất cả trung tâm"
+            value={filterCenterId}
+            onChange={(val) => { setFilterCenterId(val || null); setCurrentPage(1); }}
+            style={{ width: 200 }}
+            options={centers.map(c => ({ value: c.id, label: c.centerName }))}
+          />
+        </div>
+
+        {/* vaccine filter */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 13, color: TEXT_2, whiteSpace: "nowrap" }}>Vaccine:</span>
+          <Select
+            allowClear
+            showSearch
+            placeholder="Tất cả vaccine"
+            value={filterVaccineId}
+            onChange={(val) => { setFilterVaccineId(val || null); setCurrentPage(1); }}
+            optionFilterProp="label"
+            style={{ width: 220 }}
+            options={vaccineOptions.map(v => ({ value: v.id, label: v.nameVaccine || v.name }))}
+          />
+        </div>
+
+        {/* import date filter */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 13, color: TEXT_2, whiteSpace: "nowrap" }}>Ngày nhập:</span>
+          <input
+            type="date"
+            value={filterImportDate}
+            onChange={(e) => { setFilterImportDate(e.target.value || ""); setCurrentPage(1); }}
+            style={{
+              height: 32, padding: "0 10px", borderRadius: 6, border: `1.5px solid ${BORDER}`,
+              fontSize: 13, color: TEXT, outline: "none", background: "#fff"
+            }}
+          />
+        </div>
+
+        {(filterCenterId || filterVaccineId || filterImportDate) && (
+          <button onClick={() => { setFilterCenterId(null); setFilterVaccineId(null); setFilterImportDate(""); setCurrentPage(1); }} style={{
             padding: "5px 14px", borderRadius: 8, border: `1px solid ${BORDER}`,
             background: "#fff", color: TEXT_2, fontSize: 13, cursor: "pointer",
           }}>

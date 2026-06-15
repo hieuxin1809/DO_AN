@@ -18,10 +18,15 @@ import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.util.Collections;
 
+/**
+ * Service xác thực đăng nhập bên thứ ba thông qua Google OAuth2.
+ */
 @Service
 public class GoogleOAuth2Service {
 
-
+    /**
+     * Xác thực chuỗi ID Token nhận được từ Google Client, trả về dữ liệu payload nếu hợp lệ.
+     */
     public GoogleIdToken.Payload verifyToken(String idTokenString) {
 
         try {

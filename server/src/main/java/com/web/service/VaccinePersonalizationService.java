@@ -68,9 +68,9 @@ public class VaccinePersonalizationService {
         User user = userUtils.getUserWithAuthority();
 
         // --- 3. Đếm số mũi đã tiêm thành công ---
-        // Truyền enum StatusCustomerSchedule.confirmed qua @Param để tránh InvalidPathException
+        // Gọi repository đếm số lịch hẹn có status 'injected' hoặc 'finished' của user này đối với vaccine này
         Integer completedDoses = customerScheduleRepository.countCompletedDoses(
-                user.getId(), vaccineId, StatusCustomerSchedule.injected);
+                user.getId(), vaccineId, List.of(StatusCustomerSchedule.injected, StatusCustomerSchedule.finished));
         if (completedDoses == null) {
             completedDoses = 0;
         }
@@ -82,6 +82,7 @@ public class VaccinePersonalizationService {
                         .maxDose(vaccine.getMaxDose());
 
         // --- 5. Kiểm tra số mũi tối đa ---
+        // Nếu số mũi đã tiêm đạt giới hạn tối đa của vaccine -> Trả về không cho đặt lịch tiếp
         if (vaccine.getMaxDose() != null && completedDoses >= vaccine.getMaxDose()) {
             return builder
                     .canBook(false)
@@ -98,12 +99,12 @@ public class VaccinePersonalizationService {
 
         // --- 7. Kiểm tra khoảng cách tối thiểu giữa các mũi ---
         if (vaccine.getMinIntervalMonths() != null && completedDoses > 0) {
-            // Lấy ngày tiêm mũi cuối cùng đã confirmed, truyền enum qua @Param
+            // Lấy ngày tiêm của mũi gần nhất đã tiêm thành công từ database
             Date lastInjectedDate = customerScheduleRepository.findLastInjectedDate(
-                    user.getId(), vaccineId, StatusCustomerSchedule.confirmed);
+                    user.getId(), vaccineId, List.of(StatusCustomerSchedule.injected, StatusCustomerSchedule.finished));
 
             if (lastInjectedDate != null) {
-                // Tính ngày sớm nhất có thể tiêm = ngày tiêm cuối + khoảng cách tối thiểu
+                // Tính ngày sớm nhất được phép tiêm = Ngày tiêm mũi cuối + Số tháng khoảng cách tối thiểu (minIntervalMonths)
                 LocalDate earliestDate = lastInjectedDate.toLocalDate()
                         .plusMonths(vaccine.getMinIntervalMonths());
                 LocalDate today = LocalDate.now();
@@ -111,6 +112,7 @@ public class VaccinePersonalizationService {
                 Date earliestSqlDate = Date.valueOf(earliestDate);
                 builder.earliestNextDate(earliestSqlDate);
 
+                // Nếu hôm nay chưa đến ngày sớm nhất được phép tiêm -> Chặn không cho đặt lịch tiếp
                 if (today.isBefore(earliestDate)) {
                     // Chưa đến ngày tiêm tiếp theo
                     return builder

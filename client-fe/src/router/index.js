@@ -117,6 +117,7 @@ const adminRoutes = [
     { path: "/admin/reminders",    component: AdminReminders,    layout: layoutAdmin },
     /* Alias staff pages → admin (cùng component, đổi layout) */
     { path: "/admin/vaccines",      component: Vaccine,                  layout: layoutAdmin },
+    { path: "/admin/vaccine",       component: Vaccine,                  layout: layoutAdmin },
     { path: "/admin/add-vaccine",   component: StaffAddVaccine,          layout: layoutAdmin },
     { path: "/admin/inventory",     component: VaccineInventory,         layout: layoutAdmin },
     { path: "/admin/registrations", component: CustomerSchedule,         layout: layoutAdmin },

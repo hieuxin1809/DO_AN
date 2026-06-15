@@ -21,6 +21,9 @@ import java.util.concurrent.TimeUnit;
  *      với error name = ORDER_ALREADY_CAPTURED → fallback GET để verify status COMPLETED.
  */
 @Service
+/**
+ * Service quan ly tich hop cong thanh toan PayPal.
+ */
 public class PayPalService {
 
     @Value("${paypal.client-id}")

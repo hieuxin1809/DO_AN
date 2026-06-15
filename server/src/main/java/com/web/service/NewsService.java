@@ -7,12 +7,18 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Service quản lý tin tức y tế và tiêm chủng.
+ */
 @Component
 public class NewsService {
 
     @Autowired
     private NewsRepository newsRepository;
 
+    /**
+     * Lấy top 6 bài viết tin tức mới nhất hiển thị ngoài trang chủ.
+     */
     public List<News> top6News(){
         List<News> news = newsRepository.top6News();
         return news;

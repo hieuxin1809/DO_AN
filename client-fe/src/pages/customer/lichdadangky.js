@@ -381,6 +381,32 @@ function ActionBtnBs({ color, bg, border, onClick, 'data-bs-toggle': toggle, 'da
     );
 }
 
+/* ── helper to check if customer is allowed to reschedule ── */
+function canReschedule(item) {
+    if (item.statusCustomerSchedule !== 'confirmed' && item.statusCustomerSchedule !== 'pending' && item.statusCustomerSchedule !== 'not_injected') {
+        return false;
+    }
+    if (!item.vaccineScheduleTime || !item.vaccineScheduleTime.injectDate) return false;
+
+    const now = new Date();
+    const injectDateStr = item.vaccineScheduleTime.injectDate;
+    const startStr = item.vaccineScheduleTime.start || "00:00:00";
+    const endStr = item.vaccineScheduleTime.end || "23:59:59";
+
+    const startAt = new Date(`${injectDateStr}T${startStr}`);
+    const endAt = new Date(`${injectDateStr}T${endStr}`);
+
+    if (now < startAt) {
+        // Tương lai: phải trước giờ tiêm ít nhất 24h
+        const diffHours = (startAt - now) / (1000 * 60 * 60);
+        return diffHours >= 24;
+    } else {
+        // Quá khứ: trong vòng 24h từ lúc kết thúc ca
+        const diffHours = (now - endAt) / (1000 * 60 * 60);
+        return diffHours <= 24;
+    }
+}
+
 /* ══════════════════════════════════════════════ */
 var size = 3;
 var url  = '';
@@ -648,7 +674,7 @@ function LichDaDangKy() {
                                     </td>
                                     <td style={{ padding: '12px 14px' }}>
                                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                                            {item.statusCustomerSchedule === 'confirmed' && !checked && (
+                                            {canReschedule(item) && (
                                                 <ActionBtnBs
                                                     color="#6366f1"
                                                     onClick={() => setItem(item)}

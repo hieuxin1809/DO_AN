@@ -36,6 +36,9 @@ import java.sql.Date;
 import java.util.*;
 
 @Component
+/**
+ * Service quan ly tai khoan nguoi dung, phan quyen va xac thuc.
+ */
 public class UserService {
 
     private static final Logger logger = Logger.getLogger(UserService.class.getName());

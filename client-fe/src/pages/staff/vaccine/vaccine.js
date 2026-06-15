@@ -137,7 +137,7 @@ const Vaccine = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['#','Tên Vaccine','Giá','Số lượng','Loại','Nhà sản xuất','Độ tuổi','Ngày nhập','Trạng thái','Hành động'].map(h => (
+                {['#','Tên Vaccine','Giá','Loại','Nhà sản xuất','Độ tuổi','Ngày nhập','Trạng thái','Hành động'].map(h => (
                   <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11.5, fontWeight: 700,
                     color: T2, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: `1px solid ${B}`, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -145,9 +145,9 @@ const Vaccine = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
+                <tr><td colSpan={9} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
               ) : vaccines.length === 0 ? (
-                <tr><td colSpan={10} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có vaccine nào</td></tr>
+                <tr><td colSpan={9} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có vaccine nào</td></tr>
               ) : vaccines.map((item) => (
                 <tr key={item.id} style={{ borderBottom: `1px solid ${B}`, transition: 'background .15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -162,7 +162,6 @@ const Vaccine = () => {
                     </div>
                   </td>
                   <td style={{ padding: '13px 16px', color: S, fontWeight: 700, fontSize: 13 }}>{formatMoney(item.price)}</td>
-                  <td style={{ padding: '13px 16px', fontWeight: 700, color: item.inventory > 0 ? T : D }}>{item.inventory ?? '—'}</td>
                   <td style={{ padding: '13px 16px' }}>
                     {item.vaccineType?.typeName ? (
                       <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,

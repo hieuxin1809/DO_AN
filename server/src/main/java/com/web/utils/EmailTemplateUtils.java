@@ -121,6 +121,34 @@ public class EmailTemplateUtils {
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
 
+    public static String bookingConfirmationPayLater(String customerName, String vaccineName, String injectDate, String timeSlot, String centerName) {
+        String header = buildHeader("&#128197; X&#225;c nh&#7853;n &#273;&#259;ng k&#253; ti&#234;m ch&#7911;ng");
+
+        StringBuilder body = new StringBuilder();
+        body.append(buildGreeting(customerName));
+        body.append("<p style=\"margin:12px 0 20px;font-size:14px;color:#475569;line-height:1.7;\">")
+            .append("Ch&#250;ng t&#244;i &#273;&#227; nh&#7853;n &#273;&#432;&#7907;c &#273;&#259;ng k&#253; ti&#234;m ch&#7911;ng c&#7911;a b&#7841;n v&#224; l&#7921;a ch&#7885;n <strong>Thanh to&#225;n sau t&#7841;i trung t&#226;m</strong>. ")
+            .append("D&#432;&#7899;i &#273;&#226;y l&#224; th&#244;ng tin chi ti&#7871;t v&#7873; l&#7883;ch h&#7865;n:")
+            .append("</p>");
+
+        body.append(buildInfoTable(new String[][]{
+            {"&#128200; V&#7855;c-xin:", vaccineName},
+            {"&#128197; Ng&#224;y ti&#234;m:", injectDate},
+            {"&#9200; Gi&#7901; h&#7865;n:", timeSlot},
+            {"&#127968; Trung t&#226;m:", centerName},
+            {"&#128181; H&#236;nh th&#7913;c:", "Thanh to&#225;n sau t&#7841;i trung t&#226;m"}
+        }));
+
+        body.append("<div style=\"background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;\">");
+        body.append("<p style=\"margin:0;font-size:13px;color:#92400e;\">&#9888; <strong>L&#432;u &#253;:</strong> Vui l&#242;ng &#273;&#7871;n &#273;&#250;ng gi&#7901;, mang theo CMND/C&#259;n c&#432;&#7899;c c&#244;ng d&#226;n v&#224; th&#7921;c hi&#7878;n thanh to&#225;n (ti&#7873;n m&#7863;t ho&#7865;c qu&#7865;t th&#7867;) t&#7841;i qu&#7847;y ti&#7871;p &#273;&#243;n c&#7911;a trung t&#226;m tr&#432;&#7899;c khi v&#224;o ti&#234;m.</p>");
+        body.append("</div>");
+
+        body.append(buildDivider());
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u c&#243; th&#7855;c m&#7855;c, vui l&#242;ng li&#234;n h&#7879; qua website <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a>.</p>");
+
+        return assemble(header, wrapBody(body.toString()), buildFooter());
+    }
+
     // ─────────────────────────────────────────────
     //  2. BOOKING STATUS UPDATE
     // ─────────────────────────────────────────────
@@ -143,7 +171,7 @@ public class EmailTemplateUtils {
                 statusDesc = "L&#7883;ch ti&#234;m c&#7911;a b&#7841;n &#273;&#227; <strong>ho&#224;n th&#224;nh</strong>. Ch&#250;c b&#7841;n s&#7913;c kh&#7887;e!";
                 break;
             case "not_injected":
-                statusDesc = "H&#7879; th&#7889;ng ghi nh&#7853;n b&#7841;n <strong>ch&#432;a ti&#234;m</strong> &#273;&#250;ng l&#7883;ch. Vui l&#242;ng li&#234;n h&#7879; l&#7841;i &#273;&#7875; &#273;&#7863;t l&#7883;ch m&#7899;i.";
+                statusDesc = "H&#7879; th&#7889;ng ghi nh&#7853;n b&#7841;n <strong>ch&#432;a ti&#234;m ho&#7863;c b&#7883; ho&#227;n ti&#234;m</strong>. Vui l&#242;ng truy c&#7853;p website v&#224; t&#7921; &#273;&#7893;i l&#7883;ch m&#7899;i trong v&#242;ng 24 gi&#7901;.";
                 break;
             default:
                 statusDesc = "Tr&#7841;ng th&#225;i l&#7883;ch h&#7865;n c&#7911;a b&#7841;n &#273;&#227; &#273;&#432;&#7907;c c&#7853;p nh&#7853;t.";

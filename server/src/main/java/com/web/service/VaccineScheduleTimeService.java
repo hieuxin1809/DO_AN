@@ -20,6 +20,9 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Service
+/**
+ * Service quan ly chi tiet khung gio tiem chung cua cac ca.
+ */
 public class VaccineScheduleTimeService {
 
     @Autowired

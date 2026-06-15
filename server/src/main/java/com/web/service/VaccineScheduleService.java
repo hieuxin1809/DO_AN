@@ -19,7 +19,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 import java.sql.Date;
@@ -32,6 +34,9 @@ import java.util.List;
 import java.util.Optional;
 
 @Component
+/**
+ * Service quan ly lich tiem chung chung tai cac co so.
+ */
 public class VaccineScheduleService {
     private static final Logger log = LoggerFactory.getLogger(VaccineScheduleApi.class);
 
@@ -260,7 +265,12 @@ public class VaccineScheduleService {
             param = "";
         }
         param = "%" + param + "%";
-        Page<VaccineSchedule> page = vaccineScheduleRepository.preFindByParam(param, new Date(System.currentTimeMillis()), pageable);
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
+        Page<VaccineSchedule> page = vaccineScheduleRepository.preFindByParam(param, new Date(System.currentTimeMillis()), sortedPageable);
         return page;
     }
 
