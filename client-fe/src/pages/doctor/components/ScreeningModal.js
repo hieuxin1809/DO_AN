@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faStethoscope, faX, faSyringe, faBan, faExclamationTriangle,
+  faStethoscope, faX, faSyringe, faBan, faExclamationTriangle, faClock, faCircleXmark,
 } from '@fortawesome/free-solid-svg-icons';
 
 const PRIMARY = '#2A388F';
@@ -36,14 +36,33 @@ export default function ScreeningModal({ open, target, onClose, onSuccess }) {
   const [temperature, setTemperature] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (open && target) {
       setAnswers({});
       setTemperature('');
       setNote('');
+      setHistory([]);
+
+      const fetchHistory = async () => {
+        setLoadingHistory(true);
+        try {
+          const res = await authFetch(`/api/doctor/doctor/patient-history/${target.id}`);
+          if (res.ok) {
+            setHistory(await res.json());
+          }
+        } catch (e) {
+          console.error('Lỗi khi tải lịch sử tiêm:', e);
+        } finally {
+          setLoadingHistory(false);
+        }
+      };
+
+      fetchHistory();
     }
-  }, [open]);
+  }, [open, target]);
 
   if (!open || !target) return null;
 
@@ -51,7 +70,7 @@ export default function ScreeningModal({ open, target, onClose, onSuccess }) {
     .filter(q => q.danger && answers[q.key] === true).length > 0;
 
   const submit = async (decision) => {
-    // decision = 'inject' | 'defer'
+    // decision = 'inject' | 'defer' | 'cancel'
     if (decision === 'inject' && hasDanger) {
       const { isConfirmed } = await Swal.fire({
         title: 'Có cảnh báo y tế!',
@@ -64,6 +83,19 @@ export default function ScreeningModal({ open, target, onClose, onSuccess }) {
     if (decision === 'defer' && !note.trim()) {
       toast.warning('Vui lòng nhập lý do hoãn tiêm');
       return;
+    }
+    if (decision === 'cancel') {
+      if (!note.trim()) {
+        toast.warning('Vui lòng nhập lý do từ chối tiêm');
+        return;
+      }
+      const { isConfirmed } = await Swal.fire({
+        title: 'Xác nhận từ chối tiêm?',
+        html: 'Bệnh nhân này sẽ bị từ chối tiêm vaccine này cho lịch hẹn hiện tại. Lịch tiêm sẽ chuyển sang trạng thái HỦY. Nếu đã thanh toán, hệ thống sẽ tự động đưa vào danh sách chờ hoàn tiền.',
+        icon: 'warning', showCancelButton: true,
+        confirmButtonColor: DANGER, confirmButtonText: 'Từ chối tiêm', cancelButtonText: 'Đóng',
+      });
+      if (!isConfirmed) return;
     }
 
     setSaving(true);
@@ -88,7 +120,9 @@ export default function ScreeningModal({ open, target, onClose, onSuccess }) {
       }
       toast.success(decision === 'inject'
         ? '✅ Đã xác nhận tiêm. Giấy chứng nhận đang được cấp.'
-        : '⛔ Đã hoãn tiêm cho bệnh nhân.');
+        : decision === 'defer'
+          ? '⛔ Đã hoãn tiêm cho bệnh nhân.'
+          : '❌ Đã hủy và từ chối tiêm cho bệnh nhân.');
       onSuccess?.();
     } catch (e) {
       console.error(e);
@@ -147,6 +181,73 @@ export default function ScreeningModal({ open, target, onClose, onSuccess }) {
             <div><strong style={{ color: TEXT_2 }}>SĐT:</strong> <span style={{ color: TEXT }}>{target.phone || '—'}</span></div>
             <div><strong style={{ color: TEXT_2 }}>Ngày sinh:</strong> <span style={{ color: TEXT }}>{target.dob ? new Date(target.dob).toLocaleDateString('vi-VN') : '—'}</span></div>
             <div><strong style={{ color: TEXT_2 }}>CCCD:</strong> <span style={{ color: TEXT }}>{target.idCard || '—'}</span></div>
+          </div>
+
+          {/* Lịch sử tiêm chủng của bệnh nhân */}
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelStyle}>Lịch sử tiêm chủng của bệnh nhân</label>
+            {loadingHistory ? (
+              <div style={{ fontSize: 13, color: TEXT_2, padding: '6px 0' }}>Đang tải lịch sử tiêm...</div>
+            ) : history.length === 0 ? (
+              <div style={{
+                background: '#f8fafc', borderRadius: 10, padding: '10px 14px',
+                border: `1px dashed ${BORDER}`, fontSize: 12.5, color: TEXT_2
+              }}>
+                Chưa có lịch sử tiêm chủng nào được ghi nhận trên hệ thống.
+              </div>
+            ) : (
+              <div style={{
+                maxHeight: '140px', overflowY: 'auto', border: `1px solid ${BORDER}`,
+                borderRadius: 10, background: '#fff'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: `1px solid ${BORDER}`, position: 'sticky', top: 0, zIndex: 1 }}>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: TEXT_2 }}>Ngày tiêm</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: TEXT_2 }}>Vắc-xin</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 700, color: TEXT_2 }}>Mũi số</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: TEXT_2 }}>Ghi chú sàng lọc</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((h, idx) => {
+                      const time = h.vaccineScheduleTime;
+                      const vaccineId = time?.vaccineSchedule?.vaccine?.id;
+                      const vaccineName = time?.vaccineSchedule?.vaccine?.name || '—';
+                      const injectDateStr = time?.injectDate ? new Date(time.injectDate).toLocaleDateString('vi-VN') : '—';
+
+                      // Tính số mũi: Đếm số mũi có cùng vaccineId có index >= idx (sắp xếp giảm dần)
+                      const sameVaccinePast = history.slice(idx).filter(item => item.vaccineScheduleTime?.vaccineSchedule?.vaccine?.id === vaccineId);
+                      const doseNum = sameVaccinePast.length;
+
+                      // Lấy note từ healthStatusBefore
+                      let screenNote = '—';
+                      try {
+                        if (h.healthStatusBefore) {
+                          const parsed = JSON.parse(h.healthStatusBefore);
+                          if (parsed && parsed.note) {
+                            screenNote = parsed.note;
+                          }
+                        }
+                      } catch (ignore) {}
+
+                      return (
+                        <tr key={h.id} style={{ borderBottom: idx < history.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
+                          <td style={{ padding: '8px 10px', color: TEXT, fontWeight: 600 }}>{injectDateStr}</td>
+                          <td style={{ padding: '8px 10px', color: TEXT }}>{vaccineName}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'center', color: PRIMARY, fontWeight: 700 }}>
+                            Mũi {doseNum}
+                          </td>
+                          <td style={{ padding: '8px 10px', color: TEXT_2, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={screenNote}>
+                            {screenNote}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Body temperature */}
@@ -223,10 +324,13 @@ export default function ScreeningModal({ open, target, onClose, onSuccess }) {
           {/* Buttons */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={onClose} disabled={saving} style={btnCancel(saving)}>
-              Hủy
+              Đóng
+            </button>
+            <button onClick={() => submit('cancel')} disabled={saving} style={btnRefuse(saving)}>
+              <FontAwesomeIcon icon={faCircleXmark} /> Từ chối tiêm
             </button>
             <button onClick={() => submit('defer')} disabled={saving} style={btnDefer(saving)}>
-              <FontAwesomeIcon icon={faBan} /> Hoãn tiêm
+              <FontAwesomeIcon icon={faClock} /> Hoãn tiêm
             </button>
             <button onClick={() => submit('inject')} disabled={saving} style={btnInject(saving)}>
               <FontAwesomeIcon icon={faSyringe} /> {saving ? 'Đang lưu...' : 'Đồng ý tiêm'}
@@ -266,6 +370,12 @@ const btnCancel = (disabled) => ({
   cursor: disabled ? 'not-allowed' : 'pointer',
 });
 const btnDefer = (disabled) => ({
+  padding: '10px 18px', borderRadius: 10, border: 'none',
+  background: disabled ? '#94a3b8' : WARNING, color: '#fff', fontWeight: 700, fontSize: 13.5,
+  cursor: disabled ? 'not-allowed' : 'pointer',
+  display: 'flex', alignItems: 'center', gap: 7,
+});
+const btnRefuse = (disabled) => ({
   padding: '10px 18px', borderRadius: 10, border: 'none',
   background: disabled ? '#94a3b8' : DANGER, color: '#fff', fontWeight: 700, fontSize: 13.5,
   cursor: disabled ? 'not-allowed' : 'pointer',

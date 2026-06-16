@@ -11,6 +11,7 @@ import java.util.List;
 public class PaymentDto {
 //    private Long amount;
     private Long idScheduleTime;
+    private Long customerScheduleId;
     private String content;
     private String returnUrl;
     private String notifyUrl;

@@ -3,10 +3,11 @@ import { toast } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCalendarDay, faSyringe, faClock, faPhone, faIdCard,
-  faStethoscope, faRefresh, faCheckCircle, faXmark,
+  faStethoscope, faRefresh, faCheckCircle, faXmark, faSearch, faX, faEye,
 } from '@fortawesome/free-solid-svg-icons';
 import ScreeningModal from './components/ScreeningModal';
 import FollowupModal from './components/FollowupModal';
+import PatientHistoryModal from './components/PatientHistoryModal';
 
 const PRIMARY = '#2A388F';
 const ACCENT  = '#0ea5e9';
@@ -42,7 +43,11 @@ const DoctorTodayQueue = () => {
   const [loading, setLoading] = useState(true);
   const [screeningTarget, setScreeningTarget] = useState(null);
   const [followupTarget, setFollowupTarget] = useState(null);
+  const [historyTarget, setHistoryTarget]     = useState(null);
   const [filterDate, setFilterDate] = useState('');  // yyyy-MM-dd; trống = mặc định (hôm nay + tương lai)
+  const [search, setSearch]       = useState('');
+  const [selVaccine, setSelVaccine] = useState('');
+  const [selStatus, setSelStatus]   = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -71,6 +76,31 @@ const DoctorTodayQueue = () => {
   const pendingCount   = items.filter(i => i.statusCustomerSchedule === 'confirmed').length;
   const deferredCount  = items.filter(i => i.statusCustomerSchedule === 'not_injected').length;
 
+  const uniqueVaccines = Array.from(
+    new Set(
+      items
+        .map(i => i.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name)
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const filteredItems = items.filter(item => {
+    if (search) {
+      const q = search.toLowerCase();
+      const matchText = (item.fullName || '').toLowerCase().includes(q)
+          || (item.phone || '').includes(q)
+          || (item.idCard || '').includes(q);
+      if (!matchText) return false;
+    }
+    if (selVaccine) {
+      if (item.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name !== selVaccine) return false;
+    }
+    if (selStatus) {
+      if (item.statusCustomerSchedule !== selStatus) return false;
+    }
+    return true;
+  });
+
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
@@ -96,20 +126,6 @@ const DoctorTodayQueue = () => {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="date" value={filterDate}
-            onChange={e => setFilterDate(e.target.value)}
-            style={{
-              padding: '8px 12px', borderRadius: 10,
-              border: `1.5px solid ${BORDER}`, fontSize: 13, color: TEXT, outline: 'none',
-            }} />
-          {filterDate && (
-            <button onClick={() => setFilterDate('')}
-              style={{
-                padding: '8px 14px', borderRadius: 10,
-                border: `1.5px solid ${BORDER}`, background: '#fff', color: TEXT_2,
-                fontSize: 13, cursor: 'pointer', fontWeight: 600,
-              }}>Xóa lọc</button>
-          )}
           <button onClick={load} style={{
             padding: '9px 16px', borderRadius: 10,
             border: `1.5px solid ${BORDER}`, background: '#fff',
@@ -127,6 +143,99 @@ const DoctorTodayQueue = () => {
         <MiniStat label="Chờ tiêm" value={pendingCount} color={ACCENT} icon="⏳" />
         <MiniStat label="Đã tiêm" value={injectedCount} color={SUCCESS} icon="✅" />
         <MiniStat label="Đã hoãn" value={deferredCount} color={DANGER}  icon="⛔" />
+      </div>
+
+      {/* Advanced Filter Bar */}
+      <div style={{
+        background: '#fff', borderRadius: 16, padding: 18, marginBottom: 20,
+        border: `1px solid ${BORDER}`, boxShadow: '0 2px 8px rgba(0,0,0,.03)'
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+          {/* Search by Name/SĐT/CCCD */}
+          <div>
+            <label style={labelStyle}>Tìm bệnh nhân</label>
+            <div style={inputContainerStyle}>
+              <FontAwesomeIcon icon={faSearch} style={{ color: TEXT_2, fontSize: 13 }} />
+              <input
+                type="text"
+                placeholder="Họ tên, SĐT, CCCD..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={filterInputStyle}
+              />
+              {search && (
+                <button onClick={() => setSearch('')} style={clearBtnStyle}>
+                  <FontAwesomeIcon icon={faX} style={{ fontSize: 11 }} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Select Vaccine */}
+          <div>
+            <label style={labelStyle}>Vắc-xin</label>
+            <select
+              value={selVaccine}
+              onChange={e => setSelVaccine(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Tất cả vắc-xin</option>
+              {uniqueVaccines.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Select Status */}
+          <div>
+            <label style={labelStyle}>Trạng thái</label>
+            <select
+              value={selStatus}
+              onChange={e => setSelStatus(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Tất cả trạng thái</option>
+              <option value="confirmed">Đã duyệt (Chờ tiêm)</option>
+              <option value="injected">Đã tiêm</option>
+              <option value="finished">Hoàn thành</option>
+              <option value="not_injected">Đã hoãn</option>
+              <option value="cancelled">Đã hủy</option>
+            </select>
+          </div>
+
+          {/* Select Date */}
+          <div>
+            <label style={labelStyle}>Ngày tiêm (Dữ liệu mạng)</label>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              style={dateInputStyle}
+            />
+          </div>
+        </div>
+
+        {/* Reset button row */}
+        {(search || selVaccine || selStatus || filterDate) && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+            <button
+              onClick={() => {
+                setSearch('');
+                setSelVaccine('');
+                setSelStatus('');
+                setFilterDate('');
+              }}
+              style={{
+                padding: '8px 16px', borderRadius: 9, border: `1.5px solid ${BORDER}`,
+                background: '#fff', color: TEXT_2, fontWeight: 700, fontSize: 13,
+                cursor: 'pointer', transition: 'all .15s',
+                display: 'flex', alignItems: 'center', gap: 6
+              }}
+            >
+              <FontAwesomeIcon icon={faXmark} /> Reset bộ lọc
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Queue table */}
@@ -148,10 +257,17 @@ const DoctorTodayQueue = () => {
                 <tr><td colSpan={6} style={tdCenter}>
                   <div style={{ padding: 20 }}>
                     <div style={{ fontSize: 36, marginBottom: 8 }}>☕</div>
-                    Không có bệnh nhân nào cần tiêm hôm nay.<br/>
+                    Không có bệnh nhân nào cần tiêm ngày này.<br/>
                   </div>
                 </td></tr>
-              ) : items.map(item => {
+              ) : filteredItems.length === 0 ? (
+                <tr><td colSpan={6} style={tdCenter}>
+                  <div style={{ padding: 20 }}>
+                    <div style={{ fontSize: 36, marginBottom: 8 }}>🔍</div>
+                    Không tìm thấy bệnh nhân nào khớp với bộ lọc.<br/>
+                  </div>
+                </td></tr>
+              ) : filteredItems.map(item => {
                 const st = STATUS_VI[item.statusCustomerSchedule] || STATUS_VI.confirmed;
                 const time = item.vaccineScheduleTime;
                 /* ─── Chỉ cho action khi injectDate = today + status confirmed ─── */
@@ -227,67 +343,93 @@ const DoctorTodayQueue = () => {
                     </td>
                     {/* Action */}
                     <td style={{ padding: '14px 16px' }}>
-                      {/* Đã tiêm → cho thêm nút "Theo dõi sau tiêm" nếu chưa có */}
-                      {item.statusCustomerSchedule === 'injected' ? (
-                        item.healthStatusAfter ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {/* Nút Xem lịch sử — Bác sĩ được xem bất cứ lúc nào */}
+                        <button onClick={() => setHistoryTarget(item)}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.borderColor = ACCENT;
+                            e.currentTarget.style.background = '#f0f9ff';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.borderColor = BORDER;
+                            e.currentTarget.style.background = '#fff';
+                          }}
+                          style={{
+                            padding: '7px 12px', borderRadius: 9,
+                            border: `1.5px solid ${BORDER}`, background: '#fff',
+                            color: PRIMARY, fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            transition: 'all .15s',
+                          }}>
+                          <FontAwesomeIcon icon={faEye} /> Hồ sơ tiêm
+                        </button>
+
+                        {/* Nút hành động theo trạng thái lịch */}
+                        {item.statusCustomerSchedule === 'injected' ? (
+                          item.healthStatusAfter ? (
+                            <span style={{ fontSize: 12.5, color: '#6366f1', fontWeight: 700 }}>
+                              ✓ Hoàn thành
+                            </span>
+                          ) : (
+                            <button onClick={() => setFollowupTarget(item)}
+                              style={{
+                                padding: '7px 14px', borderRadius: 9, border: 'none',
+                                background: SUCCESS, color: '#fff',
+                                fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 6,
+                              }}>
+                              🩺 Theo dõi sau tiêm
+                            </button>
+                          )
+                        ) : item.statusCustomerSchedule === 'finished' ? (
                           <span style={{ fontSize: 12.5, color: '#6366f1', fontWeight: 700 }}>
                             ✓ Hoàn thành
                           </span>
-                        ) : (
-                          <button onClick={() => setFollowupTarget(item)}
+                        ) : item.statusCustomerSchedule === 'not_injected' ? (
+                          <span style={{ fontSize: 12.5, color: DANGER, fontWeight: 700 }}>
+                            ⛔ Đã hoãn
+                          </span>
+                        ) : item.statusCustomerSchedule === 'cancelled' ? (
+                          <span style={{ fontSize: 12.5, color: TEXT_2, fontWeight: 700 }}>
+                            ❌ Đã hủy
+                          </span>
+                        ) : canScreen ? (
+                          /* Hôm nay + confirmed → cho hành động */
+                          <button onClick={() => setScreeningTarget(item)}
                             style={{
-                              padding: '7px 14px', borderRadius: 9, border: 'none',
-                              background: SUCCESS, color: '#fff',
-                              fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
-                              display: 'flex', alignItems: 'center', gap: 6,
+                              padding: '8px 16px', borderRadius: 9, border: 'none',
+                              background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
+                              color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: 7,
                             }}>
-                            🩺 Theo dõi sau tiêm
+                            <FontAwesomeIcon icon={faStethoscope} /> Sàng lọc & Tiêm
                           </button>
-                        )
-                      ) : item.statusCustomerSchedule === 'finished' ? (
-                        <span style={{ fontSize: 12.5, color: '#6366f1', fontWeight: 700 }}>
-                          ✓ Hoàn thành
-                        </span>
-                      ) : item.statusCustomerSchedule === 'not_injected' ? (
-                        <span style={{ fontSize: 12.5, color: DANGER, fontWeight: 700 }}>
-                          ⛔ Đã hoãn
-                        </span>
-                      ) : canScreen ? (
-                        /* Hôm nay + confirmed → cho hành động */
-                        <button onClick={() => setScreeningTarget(item)}
-                          style={{
-                            padding: '8px 16px', borderRadius: 9, border: 'none',
-                            background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
-                            color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: 7,
-                          }}>
-                          <FontAwesomeIcon icon={faStethoscope} /> Sàng lọc & Tiêm
-                        </button>
-                      ) : isFuture ? (
-                        /* Tương lai → khóa */
-                        <span title="Chưa đến ngày tiêm, chỉ có thể xem trước"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            padding: '6px 12px', borderRadius: 8, fontSize: 12,
-                            background: 'rgba(100,116,139,.1)', color: TEXT_2, fontWeight: 600,
-                            cursor: 'not-allowed',
-                          }}>
-                          🔒 Chưa đến ngày
-                        </span>
-                      ) : isPast ? (
-                        /* Quá hạn nhưng còn confirmed → khóa */
-                        <span title="Lịch quá hạn, vui lòng yêu cầu KH đặt lại"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            padding: '6px 12px', borderRadius: 8, fontSize: 12,
-                            background: 'rgba(239,68,68,.1)', color: DANGER, fontWeight: 600,
-                            cursor: 'not-allowed',
-                          }}>
-                          ⏰ Quá hạn
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 12, color: TEXT_2 }}>—</span>
-                      )}
+                        ) : isFuture ? (
+                          /* Tương lai → khóa */
+                          <span title="Chưa đến ngày tiêm, chỉ có thể xem trước"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 5,
+                              padding: '6px 12px', borderRadius: 8, fontSize: 12,
+                              background: 'rgba(100,116,139,.1)', color: TEXT_2, fontWeight: 600,
+                              cursor: 'not-allowed',
+                            }}>
+                            🔒 Chưa đến ngày
+                          </span>
+                        ) : isPast ? (
+                          /* Quá hạn nhưng còn confirmed → khóa */
+                          <span title="Lịch quá hạn, vui lòng yêu cầu KH đặt lại"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 5,
+                              padding: '6px 12px', borderRadius: 8, fontSize: 12,
+                              background: 'rgba(239,68,68,.1)', color: DANGER, fontWeight: 600,
+                              cursor: 'not-allowed',
+                            }}>
+                            ⏰ Quá hạn
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: TEXT_2 }}>—</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -312,8 +454,75 @@ const DoctorTodayQueue = () => {
         onClose={() => setFollowupTarget(null)}
         onSuccess={() => { setFollowupTarget(null); load(); }}
       />
+
+      {/* Patient History Modal */}
+      <PatientHistoryModal
+        open={!!historyTarget}
+        target={historyTarget}
+        onClose={() => setHistoryTarget(null)}
+      />
     </div>
   );
+};
+
+const labelStyle = {
+  fontSize: '11px',
+  fontWeight: '700',
+  color: TEXT_2,
+  textTransform: 'uppercase',
+  letterSpacing: '0.4px',
+  marginBottom: '4px',
+  display: 'block',
+};
+const inputContainerStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  border: `1.5px solid ${BORDER}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  background: '#fff',
+};
+const filterInputStyle = {
+  border: 'none',
+  outline: 'none',
+  fontSize: '13.5px',
+  color: TEXT,
+  background: 'transparent',
+  width: '100%',
+};
+const selectStyle = {
+  border: `1.5px solid ${BORDER}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  fontSize: '13.5px',
+  color: TEXT,
+  background: '#fff',
+  outline: 'none',
+  cursor: 'pointer',
+  boxSizing: 'border-box',
+  width: '100%',
+  height: '41px',
+};
+const dateInputStyle = {
+  border: `1.5px solid ${BORDER}`,
+  borderRadius: '9px',
+  padding: '8px 12px',
+  fontSize: '13.5px',
+  color: TEXT,
+  background: '#fff',
+  outline: 'none',
+  cursor: 'pointer',
+  boxSizing: 'border-box',
+  width: '100%',
+  height: '41px',
+};
+const clearBtnStyle = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: TEXT_2,
+  padding: 0,
 };
 
 function MiniStat({ label, value, color, icon }) {

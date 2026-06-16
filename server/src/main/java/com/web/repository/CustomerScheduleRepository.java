@@ -17,9 +17,17 @@ import java.util.List;
 
 public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedule, Long> {
 
-    @Query("select c from CustomerSchedule c where c.user.id = ?1 and c.vaccineScheduleTime.vaccineSchedule.vaccine.name like ?2 and " +
-            "c.vaccineScheduleTime.injectDate >= ?3 and c.vaccineScheduleTime.injectDate <= ?4")
-    Page<CustomerSchedule> findByUser(Long userId, String search, Date from, Date to, Pageable pageable);
+    @Query("select c from CustomerSchedule c where c.user.id = :userId and c.vaccineScheduleTime.vaccineSchedule.vaccine.name like :search and " +
+            "c.vaccineScheduleTime.injectDate >= :from and c.vaccineScheduleTime.injectDate <= :to and " +
+            "(:bookingForOther is null or " +
+            "(:bookingForOther = true and c.bookingForOther = true) or " +
+            "(:bookingForOther = false and (c.bookingForOther = false or c.bookingForOther is null)))")
+    Page<CustomerSchedule> findByUser(@Param("userId") Long userId,
+                                      @Param("search") String search,
+                                      @Param("from") Date from,
+                                      @Param("to") Date to,
+                                      @Param("bookingForOther") Boolean bookingForOther,
+                                      Pageable pageable);
 
     @Query(value = "select count(cs.id) from customer_schedule cs WHERE cs.vaccine_schedule_id = ?1 and cs.status != 'cancelled'", nativeQuery = true)
     Long countRegis(Long vaccineScheduleId);
@@ -98,5 +106,19 @@ public interface CustomerScheduleRepository extends JpaRepository<CustomerSchedu
             @Param("yesterday") java.sql.Date yesterday,
             @Param("confirmedStatus") StatusCustomerSchedule confirmedStatus,
             @Param("pendingStatus") StatusCustomerSchedule pendingStatus
+    );
+
+    @Query("SELECT c FROM CustomerSchedule c WHERE " +
+           "c.statusCustomerSchedule IN :statuses " +
+           "AND (" +
+           "  (:idCard IS NOT NULL AND c.idCard = :idCard) OR " +
+           "  (:idCard IS NULL AND c.phone = :phone AND c.fullName = :fullName)" +
+           ") " +
+           "ORDER BY c.vaccineScheduleTime.injectDate DESC, c.vaccineScheduleTime.start DESC")
+    List<CustomerSchedule> findInjectedHistory(
+            @Param("idCard") String idCard,
+            @Param("phone") String phone,
+            @Param("fullName") String fullName,
+            @Param("statuses") List<StatusCustomerSchedule> statuses
     );
 }

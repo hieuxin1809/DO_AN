@@ -39,10 +39,20 @@ public class VnpayApi {
         if(count + 1 > vaccineScheduleTime.getLimitPeople()){
             throw new MessageException("Lịch tiêm vaccine đã hết lượt đăng ký");
         }
-        Long td = Long.valueOf(vaccineScheduleTime.getVaccineSchedule().getVaccine().getPrice());
+        double finalPrice = vaccineScheduleTime.getVaccineSchedule().getVaccine().getPrice();
+        if (paymentDto.getCustomerScheduleId() != null) {
+            Optional<com.web.entity.CustomerSchedule> csOpt = customerScheduleRepository.findById(paymentDto.getCustomerScheduleId());
+            if (csOpt.isPresent() && csOpt.get().getPrice() != null) {
+                finalPrice = csOpt.get().getPrice();
+            } else {
+                finalPrice = finalPrice * 0.95;
+            }
+        } else {
+            finalPrice = finalPrice * 0.95;
+        }
 
         String orderId = String.valueOf(System.currentTimeMillis());
-        String vnpayUrl = vnPayService.createOrder(td.intValue(), orderId, paymentDto.getReturnUrl());
+        String vnpayUrl = vnPayService.createOrder((int) Math.round(finalPrice), orderId, paymentDto.getReturnUrl());
         ResponsePayment responsePayment = new ResponsePayment(vnpayUrl,orderId,null);
         return responsePayment;
     }

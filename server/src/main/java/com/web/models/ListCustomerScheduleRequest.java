@@ -15,6 +15,7 @@ public class ListCustomerScheduleRequest {
     private Long vaccineScheduleId;
     private String status;
     private String fullName;
+    private String payStatus;
     private int page;
     private int limit;
 }

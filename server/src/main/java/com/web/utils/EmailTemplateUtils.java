@@ -20,7 +20,7 @@ public class EmailTemplateUtils {
     private static String buildFooter() {
         return "<tr><td style=\"background:#f8fafc;padding:28px 40px;text-align:center;border-top:1px solid #e2e8f0;\">"
                 + "<p style=\"margin:0 0 6px;font-size:13px;color:#94a3b8;\">&#169; 2025 iVaccine &#8212; H&#7879; th&#7889;ng qu&#7843;n l&#253; ti&#234;m ch&#7911;ng</p>"
-                + "<p style=\"margin:0 0 6px;font-size:13px;color:#94a3b8;\">Website: <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;text-decoration:none;\">vaxms.shop</a></p>"
+                + "<p style=\"margin:0 0 6px;font-size:13px;color:#94a3b8;\">Website: <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;text-decoration:none;\">ivaccine.shop</a></p>"
                 + "<p style=\"margin:0;font-size:12px;color:#cbd5e1;font-style:italic;\">&#128274; Email t&#7921; &#273;&#7897;ng, vui l&#242;ng kh&#244;ng reply v&#224;o email n&#224;y.</p>"
                 + "</td></tr>";
     }
@@ -116,7 +116,7 @@ public class EmailTemplateUtils {
         body.append("</div>");
 
         body.append(buildDivider());
-        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u c&#243; th&#7855;c m&#7855;c, vui l&#242;ng li&#234;n h&#7879; qua website <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a>.</p>");
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u c&#243; th&#7855;c m&#7855;c, vui l&#242;ng li&#234;n h&#7879; qua website <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;\">ivaccine.shop</a>.</p>");
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
@@ -144,7 +144,7 @@ public class EmailTemplateUtils {
         body.append("</div>");
 
         body.append(buildDivider());
-        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u c&#243; th&#7855;c m&#7855;c, vui l&#242;ng li&#234;n h&#7879; qua website <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a>.</p>");
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u c&#243; th&#7855;c m&#7855;c, vui l&#242;ng li&#234;n h&#7879; qua website <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;\">ivaccine.shop</a>.</p>");
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
@@ -192,7 +192,7 @@ public class EmailTemplateUtils {
         body.append("</div>");
 
         body.append(buildDivider());
-        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">Truy c&#7853;p <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a> &#273;&#7875; xem chi ti&#7871;t l&#7883;ch h&#7865;n.</p>");
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">Truy c&#7853;p <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;\">ivaccine.shop</a> &#273;&#7875; xem chi ti&#7871;t l&#7883;ch h&#7865;n.</p>");
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
@@ -260,7 +260,7 @@ public class EmailTemplateUtils {
         body.append("</div>");
 
         body.append(buildDivider());
-        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">C&#7847;n h&#7895; tr&#7907;? Truy c&#7853;p <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a>.</p>");
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">C&#7847;n h&#7895; tr&#7907;? Truy c&#7853;p <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;\">ivaccine.shop</a>.</p>");
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
@@ -289,14 +289,14 @@ public class EmailTemplateUtils {
             {"&#8987; H&#7841;n thanh to&#225;n:", deadline}
         }));
 
-        body.append(buildCtaButton("https://vaxms.shop", "&#128179; Thanh to&#225;n ngay", "#f59e0b"));
+        body.append(buildCtaButton("https://ivaccine.shop", "&#128179; Thanh to&#225;n ngay", "#f59e0b"));
 
         body.append("<div style=\"background:#f0f9ff;border-radius:8px;padding:14px 18px;margin:20px 0;\">");
         body.append("<p style=\"margin:0;font-size:13px;color:#075985;\">&#128161; N&#7871;u b&#7841;n &#273;&#227; thanh to&#225;n, vui l&#242;ng b&#7887; qua email n&#224;y. H&#7879; th&#7889;ng c&#243; th&#7875; c&#7853;p nh&#7853;t trong v&#242;ng v&#224;i ph&#250;t.</p>");
         body.append("</div>");
 
         body.append(buildDivider());
-        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">H&#7895; tr&#7907;: <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a></p>");
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">H&#7895; tr&#7907;: <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;\">ivaccine.shop</a></p>");
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
@@ -336,7 +336,7 @@ public class EmailTemplateUtils {
         body.append("</div>");
 
         body.append(buildDivider());
-        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">Xem l&#7883;ch h&#7865;n t&#7841;i <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a>.</p>");
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">Xem l&#7883;ch h&#7865;n t&#7841;i <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;\">ivaccine.shop</a>.</p>");
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
@@ -369,10 +369,10 @@ public class EmailTemplateUtils {
         body.append("<p style=\"margin:0;font-size:13px;color:#991b1b;line-height:1.7;\">H&#7879; th&#7889;ng t&#7921; &#273;&#7897;ng h&#7911;y l&#7883;ch h&#7865;n n&#7871;u kh&#244;ng nh&#7853;n &#273;&#432;&#7907;c thanh to&#225;n trong v&#242;ng 24 gi&#7901; k&#7875; t&#7915; khi &#273;&#259;ng k&#253; &#273;&#7875; &#273;&#7843;m b&#7843;o c&#225;c kh&#225;ch h&#224;ng kh&#225;c c&#243; c&#417; h&#7897;i &#273;&#7863;t l&#7883;ch.</p>");
         body.append("</div>");
 
-        body.append(buildCtaButton("https://vaxms.shop", "&#128197; &#272;&#7863;t l&#7883;ch m&#7899;i", "#0284c7"));
+        body.append(buildCtaButton("https://ivaccine.shop", "&#128197; &#272;&#7863;t l&#7883;ch m&#7899;i", "#0284c7"));
 
         body.append(buildDivider());
-        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u c&#243; th&#7855;c m&#7855;c, vui l&#242;ng li&#234;n h&#7879; qua <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a>.</p>");
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u c&#243; th&#7855;c m&#7855;c, vui l&#242;ng li&#234;n h&#7879; qua <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;\">ivaccine.shop</a>.</p>");
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
@@ -417,14 +417,14 @@ public class EmailTemplateUtils {
             {"&#9200; Gi&#7901; h&#7865;n:", timeSlot}
         }));
 
-        body.append(buildCtaButton("https://vaxms.shop", "&#128101; &#272;&#259;ng nh&#7853;p v&#224;o iVaccine", "#0284c7"));
+        body.append(buildCtaButton("https://ivaccine.shop", "&#128101; &#272;&#259;ng nh&#7853;p v&#224;o iVaccine", "#0284c7"));
 
         body.append("<div style=\"background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;\">");
         body.append("<p style=\"margin:0;font-size:13px;color:#92400e;\">&#9200; <strong>Nh&#7855;c nh&#7903;:</strong> Vui l&#242;ng ho&#224;n t&#7845;t thanh to&#225;n trong v&#242;ng <strong>24 gi&#7901;</strong> &#273;&#7875; gi&#7919; l&#7883;ch h&#7865;n. L&#7883;ch s&#7869; t&#7921; &#273;&#7897;ng h&#7911;y n&#7871;u qu&#225; h&#7841;n.</p>");
         body.append("</div>");
 
         body.append(buildDivider());
-        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">C&#7847;n h&#7895; tr&#7907;? Truy c&#7853;p <a href=\"https://vaxms.shop\" style=\"color:#0ea5e9;\">vaxms.shop</a>.</p>");
+        body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">C&#7847;n h&#7895; tr&#7907;? Truy c&#7853;p <a href=\"https://ivaccine.shop\" style=\"color:#0ea5e9;\">ivaccine.shop</a>.</p>");
 
         return assemble(header, wrapBody(body.toString()), buildFooter());
     }
@@ -513,7 +513,7 @@ public class EmailTemplateUtils {
         body.append("</ul>");
         body.append("</div>");
 
-        body.append(buildCtaButton("https://vaxms.shop/lich-da-dang-ky", "&#128197; Xem chi ti&#7871;t l&#7883;ch", "#0284c7"));
+        body.append(buildCtaButton("https://ivaccine.shop/lich-da-dang-ky", "&#128197; Xem chi ti&#7871;t l&#7883;ch", "#0284c7"));
 
         body.append(buildDivider());
         body.append("<p style=\"margin:0;font-size:13px;color:#94a3b8;\">N&#7871;u kh&#244;ng th&#7875; &#273;&#7871;n &#273;&#250;ng h&#7865;n, vui l&#242;ng v&#224;o trang &lt;strong&gt;L&#7883;ch c&#7911;a t&#244;i&lt;/strong&gt; &#273;&#7875; &#273;&#7893;i ho&#7863;c h&#7911;y l&#7883;ch.</p>");
@@ -551,7 +551,7 @@ public class EmailTemplateUtils {
             {"&#9200; D&#7921; ki&#7871;n m&#361;i k&#7871; ti&#7871;p:", suggestedDate != null ? suggestedDate : "—"}
         }));
 
-        body.append(buildCtaButton("https://vaxms.shop/dang-ky-tiem-chung", "&#128197; &#272;&#259;ng k&#253; m&#361;i ti&#7871;p theo", "#0284c7"));
+        body.append(buildCtaButton("https://ivaccine.shop/dang-ky-tiem-chung", "&#128197; &#272;&#259;ng k&#253; m&#361;i ti&#7871;p theo", "#0284c7"));
 
         body.append("<div style=\"background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 18px;margin:20px 0;\">");
         body.append("<p style=\"margin:0;font-size:13px;color:#0c4a6e;line-height:1.7;\">");

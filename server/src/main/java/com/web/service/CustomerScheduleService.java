@@ -129,7 +129,7 @@ public class CustomerScheduleService {
     private static final int MIN_HOURS_BEFORE_INJECT = 24;
     
     /** Slot giữ chỗ tối đa X phút trước khi auto-release */
-    public static final int HOLD_MINUTES = 15;
+    public static final int HOLD_MINUTES = 30;
 
     /**
      * Tạo lịch hẹn tiêm (Thanh toán qua Momo ngay lúc đặt).
@@ -183,7 +183,7 @@ public class CustomerScheduleService {
      * Lấy lịch sử đặt lịch tiêm của tài khoản hiện tại.
      * Hỗ trợ tìm kiếm từ khóa gần đúng và lọc theo khoảng thời gian tiêm (from - to).
      */
-    public Page<CustomerSchedule> mySchedule(Pageable pageable, String search, Date from, Date to) {
+    public Page<CustomerSchedule> mySchedule(Pageable pageable, String search, Date from, Date to, Boolean bookingForOther) {
         // Bước 1: Lấy tài khoản đang đăng nhập
         User user = userUtils.getUserWithAuthority();
         
@@ -200,7 +200,7 @@ public class CustomerScheduleService {
         }
         
         // Bước 4: Truy vấn cơ sở dữ liệu và trả về kết quả phân trang
-        return customerScheduleRepository.findByUser(user.getId(), search, from, to, pageable);
+        return customerScheduleRepository.findByUser(user.getId(), search, from, to, bookingForOther, pageable);
     }
 
     /**
@@ -224,8 +224,27 @@ public class CustomerScheduleService {
         }
         
         // Bước 4: Đổi trạng thái lịch thành 'cancelled' (Đã hủy) và lưu vào database
-        customerSchedule.get().setStatusCustomerSchedule(StatusCustomerSchedule.cancelled);
-        customerScheduleRepository.save(customerSchedule.get());
+        CustomerSchedule cs = customerSchedule.get();
+        cs.setStatusCustomerSchedule(StatusCustomerSchedule.cancelled);
+        
+        // Luồng hoàn tiền nếu đã thanh toán
+        if (cs.getPayStatus() == PayStatus.DA_THANH_TOAN) {
+            cs.setPayStatus(PayStatus.REFUND_PENDING);
+            try {
+                String email = cs.getUser().getEmail();
+                String subject = "[iVaccine] Yêu cầu cung cấp thông tin hoàn tiền";
+                String content = "<h3>Chào bạn,</h3>" +
+                        "<p>Lịch hẹn tiêm của bạn (Mã lịch: " + cs.getId() + ") đã được hủy thành công.</p>" +
+                        "<p>Vì bạn đã thanh toán trực tuyến trước đó, hệ thống sẽ thực hiện hoàn trả lại tiền cho bạn.</p>" +
+                        "<p>Vui lòng đăng nhập vào website <strong>iVaccine</strong>, truy cập mục <strong>Lịch đã đăng ký</strong>, chọn xem chi tiết lịch hẹn này và cung cấp thông tin số tài khoản ngân hàng để trung tâm thực hiện hoàn tiền.</p>" +
+                        "<p>Trân trọng,<br/>Đội ngũ iVaccine</p>";
+                mailService.sendEmail(email, subject, content, false, true);
+            } catch (Exception e) {
+                System.err.println("[Refund] Lỗi gửi email yêu cầu STK cho cs#" + cs.getId() + ": " + e.getMessage());
+            }
+        }
+        
+        customerScheduleRepository.save(cs);
     }
 
     /**
@@ -244,29 +263,7 @@ public class CustomerScheduleService {
         Page<CustomerSchedule> customerSchedulePage = customerScheduleRepository.findAll(specificationCustomerScheduleList(request), pageable);
 
         // Bước 3: Ánh xạ danh sách thực thể sang DTO Response để trả về Client
-        List<ListCustomerScheduleResponse> list = customerSchedulePage.stream().map(e ->
-                {
-                    Optional<User> user = userRepository.findById(e.getUser().getId());
-                    Optional<VaccineScheduleTime> vaccineScheduleTime = vaccineScheduleTimeRepository.findById(e.getVaccineScheduleTime().getId());
-
-                    return ListCustomerScheduleResponse.builder()
-                            .id(e.getId())
-                            .status(e.getStatusCustomerSchedule().name())
-                            .fullName(e.getFullName())
-                            .createdDate(e.getCreatedDate())
-                            .vaccineScheduleTime(vaccineScheduleTime.orElse(null))
-                            .user(user.orElse(null))
-                            .note(e.getNote())
-                            // Xác định trạng thái thanh toán
-                            .payStatus(e.getPayStatus() == PayStatus.DA_THANH_TOAN)
-                            .healthStatusAfter(e.getHealthStatusAfter())
-                            .healthStatusBefore(e.getHealthStatusBefore())
-                            .completedDate(e.getCompletedDate())
-                            .doctor(e.getDoctor())
-                            .nurse(e.getNurse())
-                            .build();
-                }
-        ).toList();
+        List<ListCustomerScheduleResponse> list = customerSchedulePage.stream().map(this::toResponseDto).toList();
         
         return new PageImpl<>(list, pageable, customerSchedulePage.getTotalElements());
     }
@@ -292,6 +289,11 @@ public class CustomerScheduleService {
             // Lọc theo mã lịch tiêm (vaccineScheduleId)
             if (ObjectUtils.isNotEmpty(requestBody.getVaccineScheduleId())) {
                 predicates.add(criteriaBuilder.equal(root.get("vaccineScheduleTime").get("vaccineSchedule").get("id"), requestBody.getVaccineScheduleId()));
+            }
+
+            // Lọc theo trạng thái thanh toán
+            if (ObjectUtils.isNotEmpty(requestBody.getPayStatus())) {
+                predicates.add(criteriaBuilder.equal(root.get("payStatus"), com.web.enums.PayStatus.valueOf(requestBody.getPayStatus())));
             }
 
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
@@ -415,6 +417,23 @@ public class CustomerScheduleService {
         
         // Thiết lập trạng thái mới cho lịch hẹn
         customerSchedule.setStatusCustomerSchedule(newStatus);
+        
+        // Luồng hoàn tiền nếu Admin hủy lịch đã thanh toán
+        if (newStatus == StatusCustomerSchedule.cancelled && customerSchedule.getPayStatus() == PayStatus.DA_THANH_TOAN) {
+            customerSchedule.setPayStatus(PayStatus.REFUND_PENDING);
+            try {
+                String email = customerSchedule.getUser().getEmail();
+                String subject = "[iVaccine] Yêu cầu cung cấp thông tin hoàn tiền";
+                String content = "<h3>Chào bạn,</h3>" +
+                        "<p>Lịch hẹn tiêm của bạn (Mã lịch: " + customerSchedule.getId() + ") đã bị hủy bởi quản trị viên trung tâm.</p>" +
+                        "<p>Vì bạn đã thanh toán trực tuyến trước đó, hệ thống sẽ thực hiện hoàn tiền lại cho bạn.</p>" +
+                        "<p>Vui lòng đăng nhập vào website <strong>iVaccine</strong>, truy cập mục <strong>Lịch đã đăng ký</strong>, chọn xem chi tiết lịch hẹn này và cung cấp thông tin số tài khoản ngân hàng để trung tâm thực hiện hoàn tiền.</p>" +
+                        "<p>Trân trọng,<br/>Đội ngũ iVaccine</p>";
+                mailService.sendEmail(email, subject, content, false, true);
+            } catch (Exception e) {
+                System.err.println("[Refund] Lỗi gửi email yêu cầu STK cho cs#" + customerSchedule.getId() + ": " + e.getMessage());
+            }
+        }
         
         // Bước 3: Nếu chuyển sang trạng thái kết thúc/hủy/chưa tiêm/đã tiêm thì gán mốc thời gian hoàn thành (completedDate)
         if (newStatus == StatusCustomerSchedule.injected
@@ -556,12 +575,34 @@ public class CustomerScheduleService {
     }
 
     /**
+     * Kiểm tra xem khung giờ tiêm đăng ký có nằm trong tương lai hay không.
+     * Ngăn chặn việc đặt các ca tiêm đã bắt đầu hoặc đã trôi qua.
+     */
+    private void validateBookingTimeInFuture(VaccineScheduleTime vaccineScheduleTime) {
+        if (vaccineScheduleTime == null || vaccineScheduleTime.getInjectDate() == null || vaccineScheduleTime.getStart() == null) {
+            return;
+        }
+        java.time.LocalDate localInjectDate = vaccineScheduleTime.getInjectDate().toLocalDate();
+        java.time.LocalTime localStartTime = vaccineScheduleTime.getStart().toLocalTime();
+        java.time.LocalDateTime startAt = localInjectDate.atTime(localStartTime);
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        if (now.isAfter(startAt)) {
+            throw new MessageException("Khung giờ tiêm này đã bắt đầu hoặc đã trôi qua. Vui lòng chọn khung giờ khác trong tương lai.");
+        }
+    }
+
+    /**
      * Tạo lịch đặt tiêm không thanh toán trước (Thanh toán sau tại quầy).
      * Gửi email nhắc nhở hoàn tất thủ tục thanh toán trong vòng 24 giờ.
      */
     public CustomerSchedule createNotPay(CustomerSchedule customerSchedule) {
         User user = userUtils.getUserWithAuthority();
         VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository.findById(customerSchedule.getVaccineScheduleTime().getId()).get();
+        
+        // Kiểm tra khung giờ tiêm phải ở tương lai
+        validateBookingTimeInFuture(vaccineScheduleTime);
+        
         // Gọi hàm lưu chính
         CustomerSchedule result = save(customerSchedule, null, null);
         
@@ -597,6 +638,9 @@ public class CustomerScheduleService {
                 .findById(customerSchedule.getVaccineScheduleTime().getId())
                 .orElseThrow(() -> new MessageException("Khung giờ không tồn tại"));
 
+        // Kiểm tra khung giờ tiêm phải ở tương lai
+        validateBookingTimeInFuture(vaccineScheduleTime);
+
         /* ─── Bước 2: Kiểm tra cá nhân hóa ─── */
         // Chỉ áp dụng kiểm tra khi tự đặt lịch cho bản thân (không đặt cho người thân)
         boolean forOther = Boolean.TRUE.equals(customerSchedule.getBookingForOther());
@@ -622,6 +666,10 @@ public class CustomerScheduleService {
         customerSchedule.setStatusCustomerSchedule(StatusCustomerSchedule.pending_payment);
         customerSchedule.setCustomerSchedulePay(CustomerSchedulePay.CHUA_THANH_TOAN);
         customerSchedule.setPayStatus(PayStatus.CHUA_THANH_TOAN);
+        
+        Integer rawPrice = vaccineScheduleTime.getVaccineSchedule().getVaccine().getPrice();
+        double discounted = (rawPrice != null ? rawPrice : 0) * 0.95;
+        customerSchedule.setPrice(discounted);
         
         return customerScheduleRepository.save(customerSchedule);
     }
@@ -652,27 +700,54 @@ public class CustomerScheduleService {
     }
 
     /**
+    /**
      * Cron Job ngầm: Chạy định kỳ mỗi 60 giây (1 phút).
-     * Tìm tất cả các lịch hẹn ở trạng thái 'pending_payment' quá 15 phút chưa thanh toán
-     * và tự động chuyển sang 'cancelled' để giải phóng slot trống cho người khác.
+     * Tìm tất cả các lịch hẹn ở trạng thái 'pending_payment' quá 30 phút chưa thanh toán
+     * và tự động chuyển sang thanh toán tại quầy (pending, CHUA_THANH_TOAN, 100% price).
      */
     @Scheduled(fixedRate = 60_000)
     @Transactional
     public void releaseExpiredHolds() {
-        // Xác định mốc thời gian tối đa được giữ chỗ (hiện tại - 15 phút)
+        // Xác định mốc thời gian tối đa được giữ chỗ (hiện tại - 30 phút)
         Timestamp cutoff = new Timestamp(System.currentTimeMillis() - HOLD_MINUTES * 60_000L);
         // Tìm các đơn giữ chỗ đã quá hạn
         List<CustomerSchedule> expired = customerScheduleRepository
                 .findExpiredHolds(StatusCustomerSchedule.pending_payment, cutoff);
         
-        // Chuyển toàn bộ sang cancelled
+        // Chuyển toàn bộ sang thanh toán tại quầy (giá gốc)
         for (CustomerSchedule cs : expired) {
-            cs.setStatusCustomerSchedule(StatusCustomerSchedule.cancelled);
+            cs.setStatusCustomerSchedule(StatusCustomerSchedule.pending);
+            cs.setCustomerSchedulePay(CustomerSchedulePay.CHUA_THANH_TOAN);
+            cs.setPayStatus(PayStatus.CHUA_THANH_TOAN);
+            
+            // Khôi phục giá gốc 100%
+            if (cs.getVaccineScheduleTime() != null && cs.getVaccineScheduleTime().getVaccineSchedule() != null
+                    && cs.getVaccineScheduleTime().getVaccineSchedule().getVaccine() != null) {
+                Integer rawPrice = cs.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getPrice();
+                cs.setPrice(rawPrice != null ? rawPrice.doubleValue() : 0.0);
+            }
+            
             customerScheduleRepository.save(cs);
+            
+            // Gửi email thông báo
+            if (cs.getUser() != null && cs.getUser().getEmail() != null) {
+                try {
+                    String email = cs.getUser().getEmail();
+                    String subject = "[iVaccine] Chuyển đổi hình thức thanh toán lịch tiêm";
+                    String content = "<h3>Chào bạn,</h3>" +
+                            "<p>Thời gian 30 phút thanh toán trực tuyến cho lịch đặt tiêm của bạn (Mã lịch: " + cs.getId() + ") đã hết hạn.</p>" +
+                            "<p>Để hỗ trợ bạn giữ chỗ tiêm, hệ thống đã tự động chuyển đổi lịch hẹn này sang hình thức <strong>Thanh toán tại trung tâm (giá gốc)</strong>.</p>" +
+                            "<p>Mức giá thanh toán lúc này sẽ được tính là giá gốc 100% tại trung tâm.</p>" +
+                            "<p>Trân trọng,<br/>Đội ngũ iVaccine</p>";
+                    mailService.sendEmail(email, subject, content, false, true);
+                } catch (Exception e) {
+                    System.err.println("[Hold] Lỗi gửi email chuyển đổi hình thức cho cs#" + cs.getId() + ": " + e.getMessage());
+                }
+            }
         }
         
         if (!expired.isEmpty()) {
-            System.out.println("[Hold] Tự động giải phóng " + expired.size() + " đơn giữ chỗ đã hết hạn");
+            System.out.println("[Hold] Tự động chuyển đổi " + expired.size() + " đơn giữ chỗ đã quá hạn sang thanh toán tại quầy");
         }
     }
 
@@ -707,6 +782,29 @@ public class CustomerScheduleService {
                 cs.setCompletedDate(new Timestamp(System.currentTimeMillis()));
                 customerScheduleRepository.save(cs);
                 count++;
+                
+                // Cộng slot dư vào ngày hôm sau hoặc lịch gần nhất trong tương lai
+                try {
+                    if (cs.getVaccineScheduleTime() != null && cs.getVaccineScheduleTime().getVaccineSchedule() != null
+                            && cs.getVaccineScheduleTime().getVaccineSchedule().getVaccine() != null
+                            && cs.getVaccineScheduleTime().getVaccineSchedule().getCenter() != null) {
+                        Long vaccineId = cs.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getId();
+                        Long centerId = cs.getVaccineScheduleTime().getVaccineSchedule().getCenter().getId();
+                        java.sql.Date tomorrow = java.sql.Date.valueOf(java.time.LocalDate.now().plusDays(1));
+                        
+                        List<VaccineScheduleTime> nextSlots = vaccineScheduleTimeRepository.findNextAvailableSlots(
+                                vaccineId, centerId, tomorrow, PageRequest.of(0, 1));
+                        if (!nextSlots.isEmpty()) {
+                            VaccineScheduleTime nextSlot = nextSlots.get(0);
+                            nextSlot.setLimitPeople(nextSlot.getLimitPeople() + 1);
+                            vaccineScheduleTimeRepository.save(nextSlot);
+                            System.out.println("[AutoMissed] Đã cộng 1 slot dư của vaccine #" + vaccineId + 
+                                    " tại trung tâm #" + centerId + " sang ca tiêm ngày " + nextSlot.getInjectDate() + " (ID: " + nextSlot.getId() + ")");
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("[AutoMissed] Lỗi cộng slot dư carry-over: " + e.getMessage());
+                }
                 
                 try {
                     // Gửi email thông báo cho khách hàng về việc lịch tiêm đã bị hủy do quá hạn không đến
@@ -826,6 +924,13 @@ public class CustomerScheduleService {
         customerSchedule.setCustomerSchedulePay(CustomerSchedulePay.CHUA_THANH_TOAN);
         customerSchedule.setPayStatus(PayStatus.CHUA_THANH_TOAN);
         
+        Integer rawPrice = vaccineScheduleTime.getVaccineSchedule().getVaccine().getPrice();
+        double finalPrice = rawPrice != null ? rawPrice.doubleValue() : 0.0;
+        if (payType != null) {
+            finalPrice = finalPrice * 0.95;
+        }
+        customerSchedule.setPrice(finalPrice);
+        
         // Cập nhật thông tin cổng thanh toán tương ứng
         if (payType != null) {
             if (payType.equals(PayType.VNPAY)) {
@@ -852,7 +957,7 @@ public class CustomerScheduleService {
             payment.setPayType(payType);
             payment.setOrderId(orderId);
             payment.setRequestId(orderId);
-            payment.setAmount(vaccineScheduleTime.getVaccineSchedule().getVaccine().getPrice());
+            payment.setAmount(customerSchedule.getPrice() != null ? customerSchedule.getPrice().intValue() : 0);
             paymentRepository.save(payment);
         }
         return customerSchedule;
@@ -924,14 +1029,21 @@ public class CustomerScheduleService {
             throw new MessageException("Lịch này đã được thanh toán");
         }
 
-        /* ─── Kiểm tra thời hạn 15 phút giữ chỗ ─── */
+        /* ─── Kiểm tra thời hạn 30 phút giữ chỗ ─── */
         if (customerSchedule.getStatusCustomerSchedule() == StatusCustomerSchedule.pending_payment) {
             long expiresAt = customerSchedule.getCreatedDate().getTime() + HOLD_MINUTES * 60_000L;
             if (System.currentTimeMillis() > expiresAt) {
-                // Quá hạn -> chuyển trạng thái thành cancelled
-                customerSchedule.setStatusCustomerSchedule(StatusCustomerSchedule.cancelled);
+                // Chuyển sang thanh toán tại quầy
+                customerSchedule.setStatusCustomerSchedule(StatusCustomerSchedule.pending);
+                customerSchedule.setCustomerSchedulePay(CustomerSchedulePay.CHUA_THANH_TOAN);
+                customerSchedule.setPayStatus(PayStatus.CHUA_THANH_TOAN);
+                if (customerSchedule.getVaccineScheduleTime() != null && customerSchedule.getVaccineScheduleTime().getVaccineSchedule() != null
+                        && customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine() != null) {
+                    Integer rawPrice = customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getPrice();
+                    customerSchedule.setPrice(rawPrice != null ? rawPrice.doubleValue() : 0.0);
+                }
                 customerScheduleRepository.save(customerSchedule);
-                throw new MessageException("Đã quá thời gian giữ chỗ (15 phút). Vui lòng đặt lại.");
+                throw new MessageException("Đã quá thời gian thanh toán trực tuyến hưởng ưu đãi (30 phút). Lịch hẹn đã chuyển sang thanh toán tại quầy với giá gốc.");
             }
         }
         
@@ -991,7 +1103,7 @@ public class CustomerScheduleService {
         payment.setPayType(paymentRequest.getPayType());
         payment.setOrderId(orderId);
         payment.setRequestId(orderId);
-        payment.setAmount(customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getPrice());
+        payment.setAmount(customerSchedule.getPrice() != null ? customerSchedule.getPrice().intValue() : 0);
         paymentRepository.save(payment);
     }
 
@@ -1212,7 +1324,7 @@ public class CustomerScheduleService {
         payment.setPayType(PayType.TIEN_MAT);
         payment.setOrderId("COUNTER_" + customerSchedule.getId() + "_" + System.currentTimeMillis());
         payment.setRequestId(payment.getOrderId());
-        payment.setAmount(customerSchedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getPrice());
+        payment.setAmount(customerSchedule.getPrice() != null ? customerSchedule.getPrice().intValue() : 0);
         paymentRepository.save(payment);
     }
 
@@ -1283,11 +1395,56 @@ public class CustomerScheduleService {
                 .user(user.orElse(null))
                 .note(e.getNote())
                 .payStatus(e.getPayStatus() == PayStatus.DA_THANH_TOAN)
+                .payStatusName(e.getPayStatus() != null ? e.getPayStatus().name() : null)
+                .bankName(e.getBankName())
+                .bankAccount(e.getBankAccount())
+                .bankAccountName(e.getBankAccountName())
+                .refundNotes(e.getRefundNotes())
+                .price(e.getPrice())
                 .healthStatusAfter(e.getHealthStatusAfter())
                 .healthStatusBefore(e.getHealthStatusBefore())
                 .completedDate(e.getCompletedDate())
                 .doctor(e.getDoctor())
                 .nurse(e.getNurse())
                 .build();
+    }
+
+    @Transactional
+    public void submitRefundBankInfo(Long id, String bankName, String bankAccount, String bankAccountName) {
+        CustomerSchedule cs = customerScheduleRepository.findById(id)
+                .orElseThrow(() -> new MessageException("Không tìm thấy lịch hẹn"));
+        
+        User user = userUtils.getUserWithAuthority();
+        if (user == null || !cs.getUser().getId().equals(user.getId())) {
+            throw new MessageException("Bạn không có quyền thực hiện hành động này");
+        }
+        
+        if (cs.getPayStatus() != PayStatus.REFUND_PENDING) {
+            throw new MessageException("Trạng thái thanh toán của lịch hẹn này không phải là Chờ hoàn tiền");
+        }
+        
+        cs.setBankName(bankName);
+        cs.setBankAccount(bankAccount);
+        cs.setBankAccountName(bankAccountName);
+        customerScheduleRepository.save(cs);
+    }
+
+    @Transactional
+    public void confirmRefundDone(Long id, String refundNotes) {
+        CustomerSchedule cs = customerScheduleRepository.findById(id)
+                .orElseThrow(() -> new MessageException("Không tìm thấy lịch hẹn"));
+        
+        User user = userUtils.getUserWithAuthority();
+        if (user == null) {
+            throw new MessageException("Vui lòng đăng nhập");
+        }
+        
+        if (cs.getPayStatus() != PayStatus.REFUND_PENDING) {
+            throw new MessageException("Lịch hẹn này không ở trạng thái Chờ hoàn tiền");
+        }
+        
+        cs.setPayStatus(PayStatus.REFUNDED);
+        cs.setRefundNotes(refundNotes);
+        customerScheduleRepository.save(cs);
     }
 }

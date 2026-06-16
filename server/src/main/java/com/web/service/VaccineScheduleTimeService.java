@@ -184,7 +184,27 @@ public class VaccineScheduleTimeService {
     }
 
     public List<VaccineScheduleTimeResponse> findTimeBySchedule(Long idSchedule, Date date) {
-        return vaccineScheduleTimeRepository.findTimeBySchedule(idSchedule, date);
+        List<VaccineScheduleTimeResponse> list = vaccineScheduleTimeRepository.findTimeBySchedule(idSchedule, date);
+        if (date == null) {
+            return list;
+        }
+        java.time.LocalDate localDate = date.toLocalDate();
+        java.time.LocalDate today = java.time.LocalDate.now();
+        
+        if (localDate.isBefore(today)) {
+            return new java.util.ArrayList<>();
+        } else if (localDate.isEqual(today)) {
+            java.time.LocalTime nowTime = java.time.LocalTime.now();
+            return list.stream()
+                    .filter(item -> {
+                        if (item.getStart() == null) return false;
+                        java.time.LocalTime startTime = item.getStart().toLocalTime();
+                        return startTime.isAfter(nowTime);
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+        } else {
+            return list;
+        }
     }
 
     public VaccineScheduleTime findById(Long id) {

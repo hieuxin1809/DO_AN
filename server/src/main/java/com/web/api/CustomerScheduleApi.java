@@ -77,8 +77,9 @@ public class CustomerScheduleApi {
 
     @GetMapping("/customer/my-schedule")
     public ResponseEntity<?> mySchedule(Pageable pageable, @RequestParam(required = false) String search,
-                                        @RequestParam(required = false)Date from,@RequestParam(required = false)Date to ) {
-        Page<CustomerSchedule> result = customerScheduleService.mySchedule(pageable, search, from, to);
+                                        @RequestParam(required = false) Date from, @RequestParam(required = false) Date to,
+                                        @RequestParam(required = false) Boolean bookingForOther) {
+        Page<CustomerSchedule> result = customerScheduleService.mySchedule(pageable, search, from, to, bookingForOther);
         result.forEach(p->{
             System.out.println(p.getCreatedDate());
         });
@@ -187,5 +188,27 @@ public class CustomerScheduleApi {
     @PostMapping("/nurse/my-patients")
     public ResponseEntity<?> nursePatients(@RequestBody ListCustomerScheduleRequest request) {
         return new ResponseEntity<>(customerScheduleService.listCustomerScheduleForNurse(request), HttpStatus.OK);
+    }
+
+    // Khách hàng gửi thông tin tài khoản ngân hàng nhận tiền hoàn
+    @PostMapping("/customer/submit-refund-bank/{id}")
+    public ResponseEntity<?> submitRefundBankInfo(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body) {
+        String bankName = body.get("bankName");
+        String bankAccount = body.get("bankAccount");
+        String bankAccountName = body.get("bankAccountName");
+        customerScheduleService.submitRefundBankInfo(id, bankName, bankAccount, bankAccountName);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    // Admin xác nhận đã hoàn tiền thủ công cho khách hàng
+    @PostMapping("/admin/confirm-refund-done/{id}")
+    public ResponseEntity<?> confirmRefundDone(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body) {
+        String refundNotes = body.get("refundNotes");
+        customerScheduleService.confirmRefundDone(id, refundNotes);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 }

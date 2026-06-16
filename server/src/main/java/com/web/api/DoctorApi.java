@@ -223,11 +223,12 @@ public class DoctorApi {
 
         List<CustomerSchedule> out = customerScheduleRepository.findAll().stream()
                 .filter(cs -> cs.getDoctor() != null && Objects.equals(cs.getDoctor().getId(), doc.getId()))
-                // Chỉ confirmed + injected + finished (đã tiêm hoặc đang chờ tiêm)
+                // Chỉ confirmed + injected + finished + not_injected + cancelled (đã tiêm, chờ tiêm, hoãn tiêm, từ chối/hủy)
                 .filter(cs -> cs.getStatusCustomerSchedule() == StatusCustomerSchedule.confirmed
                            || cs.getStatusCustomerSchedule() == StatusCustomerSchedule.injected
                            || cs.getStatusCustomerSchedule() == StatusCustomerSchedule.finished
-                           || cs.getStatusCustomerSchedule() == StatusCustomerSchedule.not_injected)
+                           || cs.getStatusCustomerSchedule() == StatusCustomerSchedule.not_injected
+                           || cs.getStatusCustomerSchedule() == StatusCustomerSchedule.cancelled)
                 .filter(cs -> cs.getVaccineScheduleTime() != null
                         && cs.getVaccineScheduleTime().getInjectDate() != null)
                 .filter(cs -> {
@@ -255,6 +256,34 @@ public class DoctorApi {
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
         return new ResponseEntity<>(out, HttpStatus.OK);
+    }
+
+    /** GET /api/doctor/doctor/patient-history/{customerScheduleId} — xem lịch sử tiêm của bệnh nhân */
+    @GetMapping("/doctor/patient-history/{customerScheduleId}")
+    public ResponseEntity<?> getPatientHistory(@PathVariable Long customerScheduleId) {
+        Doctor doc = currentDoctor();
+        CustomerSchedule cs = customerScheduleRepository.findById(customerScheduleId)
+                .orElseThrow(() -> new MessageException("Không tìm thấy lịch tiêm!"));
+
+        // Lấy thông tin tìm kiếm lịch sử
+        String idCard = cs.getIdCard();
+        if (idCard != null && idCard.trim().isEmpty()) {
+            idCard = null;
+        }
+        String phone = cs.getPhone();
+        String fullName = cs.getFullName();
+
+        List<CustomerSchedule> history = customerScheduleRepository.findInjectedHistory(
+                idCard, phone, fullName,
+                List.of(StatusCustomerSchedule.injected, StatusCustomerSchedule.finished)
+        );
+
+        // Loại trừ chính lịch hẹn hiện tại khỏi lịch sử (nếu nó đã có trạng thái injected hoặc finished)
+        history = history.stream()
+                .filter(item -> !item.getId().equals(customerScheduleId))
+                .collect(Collectors.toList());
+
+        return new ResponseEntity<>(history, HttpStatus.OK);
     }
 
     /** POST /api/doctor/screening/{customerScheduleId} — sàng lọc + tiêm/hoãn */
@@ -330,8 +359,29 @@ public class DoctorApi {
             } catch (Exception e) {
                 System.err.println("[DoctorApi.screening] Lỗi gửi email hoãn tiêm: " + e.getMessage());
             }
+        } else if ("cancel".equalsIgnoreCase(decision)) {
+            cs.setStatusCustomerSchedule(StatusCustomerSchedule.cancelled);
+            cs.setCompletedDate(new Timestamp(System.currentTimeMillis()));
+            
+            // Luồng hoàn tiền nếu trước đó đã thanh toán online thành công
+            if (cs.getPayStatus() == com.web.enums.PayStatus.DA_THANH_TOAN) {
+                cs.setPayStatus(com.web.enums.PayStatus.REFUND_PENDING);
+                try {
+                    String email = cs.getUser().getEmail();
+                    String subject = "[iVaccine] Yêu cầu cung cấp thông tin hoàn tiền do bác sĩ từ chối tiêm";
+                    String content = "<h3>Chào bạn,</h3>" +
+                            "<p>Lịch hẹn tiêm của bạn (Mã lịch: " + cs.getId() + ") đã bị hủy do bác sĩ kết luận chống chỉ định tiêm chủng sau khi khám sàng lọc.</p>" +
+                            "<p>Vì bạn đã thanh toán trực tuyến trước đó, hệ thống sẽ thực hiện hoàn tiền lại cho bạn.</p>" +
+                            "<p>Vui lòng đăng nhập vào website <strong>iVaccine</strong>, truy cập mục <strong>Lịch đã đăng ký</strong>, chọn xem chi tiết lịch hẹn này và cung cấp thông tin số tài khoản ngân hàng để trung tâm thực hiện hoàn tiền.</p>" +
+                            "<p>Trân trọng,<br/>Đội ngũ iVaccine</p>";
+                    mailService.sendEmail(email, subject, content, false, true);
+                } catch (Exception e) {
+                    System.err.println("[DoctorApi.screening] Lỗi gửi email hoàn tiền từ chối tiêm cs#" + cs.getId() + ": " + e.getMessage());
+                }
+            }
+            customerScheduleRepository.save(cs);
         } else {
-            throw new MessageException("Decision không hợp lệ (inject hoặc defer)");
+            throw new MessageException("Decision không hợp lệ (inject, defer hoặc cancel)");
         }
 
         return new ResponseEntity<>(cs, HttpStatus.OK);

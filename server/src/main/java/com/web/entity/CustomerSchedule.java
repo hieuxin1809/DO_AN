@@ -89,4 +89,15 @@ public class CustomerSchedule {
      */
     @Column(name = "booking_for_other")
     private Boolean bookingForOther;
+
+    private Double price;
+
+    private String bankName;
+
+    private String bankAccount;
+
+    private String bankAccountName;
+
+    @Column(columnDefinition = "TEXT")
+    private String refundNotes;
 }

@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router-dom';
 import layoutAdmin from "../layout/admin/Layout";
 import layoutLogin from "../layout/customer/loginlayout/login";
 import layoutStaff from "../layout/staff/Layout";
@@ -24,7 +25,6 @@ import DoctorProfile     from "../pages/doctor/profile";
 //public
 import login from "../pages/public/login";
 import register from '../pages/public/register';
-import signin from '../pages/public/signin';
 import khachHangAdmin from "../pages/admin/khachhang";
 import employeeAdmin from "../pages/admin/employee";
 import AdminPhanHoi from "../pages/admin/phanHoi";
@@ -64,7 +64,8 @@ const publicRoutes = [
     {path: "/login", component: login, layout: layoutLogin},
     { path: "/activate-account", component: ActivateAccount },
     {path: "/register", component: register },
-    {path: "/signin", component: signin },
+    {path: "/signin", component: () => <Navigate to="/login" replace />, layout: null},
+    {path: "/sign-in", component: () => <Navigate to="/login" replace />, layout: null},
     {path: "/tra-cuu-lich-tiem", component: TraCuuLichTiem},
     {path: "/lich-tiem-da-qua", component: LichTiemDaQua},
     { path: "/quenmatkhau", component: QuenMatKhau },

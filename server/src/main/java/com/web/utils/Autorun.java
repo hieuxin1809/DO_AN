@@ -43,7 +43,7 @@ public class Autorun {
                             "    <span>Tên mũi tiêm: </span>"+ schedule.getVaccineScheduleTime().getVaccineSchedule().getVaccine().getName()+"<br>"+
                             "    <span>Ngày đăng ký: </span>"+ schedule.getCreatedDate()+"<br>"+
                             "    <p style='margin-bottom: 0;'>Nếu cần thêm thông tin, vui lòng liên hệ trung tâm hỗ trợ.</p>" +
-                            "    <a href='http://vaxms.shop' style='margin-top: 15px; padding: 10px 20px; background-color: #e74c3c; color: white; border: none; border-radius: 3px; cursor: pointer;'>" +
+                            "    <a href='http://ivaccine.shop' style='margin-top: 15px; padding: 10px 20px; background-color: #e74c3c; color: white; border: none; border-radius: 3px; cursor: pointer;'>" +
                             "        Liên hệ hỗ trợ" +
                             "    </a>" +
                             "</div>"

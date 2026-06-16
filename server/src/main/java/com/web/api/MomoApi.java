@@ -45,15 +45,24 @@ public class MomoApi {
         if(count + 1 > vaccineScheduleTime.getLimitPeople()){
             throw new MessageException("Lịch tiêm vaccine đã hết lượt đăng ký");
         }
-        Long td = Long.valueOf(vaccineScheduleTime.getVaccineSchedule().getVaccine().getPrice());
-
+        double finalPrice = vaccineScheduleTime.getVaccineSchedule().getVaccine().getPrice();
+        if (paymentDto.getCustomerScheduleId() != null) {
+            Optional<com.web.entity.CustomerSchedule> csOpt = customerScheduleRepository.findById(paymentDto.getCustomerScheduleId());
+            if (csOpt.isPresent() && csOpt.get().getPrice() != null) {
+                finalPrice = csOpt.get().getPrice();
+            } else {
+                finalPrice = finalPrice * 0.95;
+            }
+        } else {
+            finalPrice = finalPrice * 0.95;
+        }
 
         String orderId = String.valueOf(System.currentTimeMillis());
         String requestId = String.valueOf(System.currentTimeMillis());
         Environment environment = Environment.selectEnv("dev");
         PaymentResponse captureATMMoMoResponse = null;
         try {
-            captureATMMoMoResponse = CreateOrderMoMo.process(environment, orderId, requestId, Long.toString(td), paymentDto.getContent(), paymentDto.getReturnUrl(), paymentDto.getNotifyUrl(), "", RequestType.PAY_WITH_ATM, null);
+            captureATMMoMoResponse = CreateOrderMoMo.process(environment, orderId, requestId, Long.toString(Math.round(finalPrice)), paymentDto.getContent(), paymentDto.getReturnUrl(), paymentDto.getNotifyUrl(), "", RequestType.PAY_WITH_ATM, null);
         } catch (Exception e) {
             e.printStackTrace();
         }

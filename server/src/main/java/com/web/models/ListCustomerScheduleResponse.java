@@ -34,5 +34,10 @@ public class ListCustomerScheduleResponse {
     private Timestamp completedDate;
     private Doctor doctor;
     private Nurse nurse;
-
+    private String payStatusName;
+    private String bankName;
+    private String bankAccount;
+    private String bankAccountName;
+    private String refundNotes;
+    private Double price;
 }

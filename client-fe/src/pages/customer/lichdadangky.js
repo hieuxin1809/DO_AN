@@ -6,6 +6,9 @@ import { getMethod, postMethod, postMethodPayload } from '../../services/request
 import StarRating from './star';
 import DoiLich from './doilich';
 import { downloadCertificatePdf } from '../../services/certificatePdf';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+
+const PAYPAL_CLIENT_ID = "AfQvtYaXkCSyaDdKT_f-sY3ZChQm2CXDMx94N0W3XBscBmLG3TgGIT4UzINwxjbFAOG6w19I29dWjMOk";
 
 /* ── Date / time formatters ──────────────────── */
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -76,10 +79,17 @@ function StatusBadge({ status }) {
     );
 }
 
-function PayBadge({ paid }) {
-    return paid
-        ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#065f46', background: '#d1fae5', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' }}>✓ Đã thanh toán</span>
-        : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#92400e', background: '#fef3c7', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' }}>⏳ Chưa thanh toán</span>;
+function PayBadge({ status }) {
+    if (status === 'DA_THANH_TOAN') {
+        return <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#065f46', background: '#d1fae5', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' }}>✓ Đã thanh toán</span>;
+    }
+    if (status === 'REFUND_PENDING') {
+        return <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#b45309', background: '#fef3c7', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' }}>🔄 Chờ hoàn tiền</span>;
+    }
+    if (status === 'REFUNDED') {
+        return <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#4b5563', background: '#e5e7eb', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' }}>💸 Đã hoàn tiền</span>;
+    }
+    return <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#92400e', background: '#fef3c7', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' }}>⏳ Chưa thanh toán</span>;
 }
 
 /* ── HealthStatusCell — parse JSON screening data sạch sẽ ────────── */
@@ -381,6 +391,16 @@ function ActionBtnBs({ color, bg, border, onClick, 'data-bs-toggle': toggle, 'da
     );
 }
 
+/* ── helper to check if customer is allowed to pay online ── */
+function canPayOnline(item) {
+    if (item.statusCustomerSchedule !== 'pending_payment') return false;
+    if (!item.createdDate) return false;
+    const createdTime = new Date(item.createdDate).getTime();
+    const nowTime = new Date().getTime();
+    const diffMinutes = (nowTime - createdTime) / (1000 * 60);
+    return diffMinutes < 30; // 30 phút giữ chỗ
+}
+
 /* ── helper to check if customer is allowed to reschedule ── */
 function canReschedule(item) {
     if (item.statusCustomerSchedule !== 'confirmed' && item.statusCustomerSchedule !== 'pending' && item.statusCustomerSchedule !== 'not_injected') {
@@ -421,6 +441,55 @@ function LichDaDangKy() {
     const [currentPage,      setCurrentPage]      = useState(0);
     const [item,             setItem]             = useState(null);
     const [healthItem,       setHealthItem]       = useState(null);
+    const [refundItem,       setRefundItem]       = useState(null);
+    const [bookingForOtherFilter, setBookingForOtherFilter] = useState(false);
+    const [paymentItem,      setPaymentItem]      = useState(null);
+    const [showPayModal,     setShowPayModal]     = useState(false);
+    const [paypalProcessing, setPaypalProcessing] = useState(false);
+
+    function openPaymentModal(item) {
+        setPaymentItem(item);
+        setShowPayModal(true);
+    }
+
+    function convertVndToUsd(vnd) {
+        if (!vnd) return '0.00';
+        return (vnd / 23500).toFixed(2);
+    }
+
+    async function requestPayMentVnpay(item) {
+        const urlmain    = window.location.origin;
+        const returnurl  = urlmain + '/thong-bao';
+        const paymentDto = { 
+            content: 'Thanh toán', 
+            returnUrl: returnurl, 
+            notifyUrl: returnurl, 
+            idScheduleTime: item.vaccineScheduleTime.id,
+            customerScheduleId: item.id
+        };
+        localStorage.setItem('thongtindangky', JSON.stringify({
+            fullName: item.fullName,
+            dob: item.dob,
+            phone: item.phone,
+            idCard: item.idCard,
+            address: item.address,
+            note: item.note,
+            bookingForOther: item.bookingForOther,
+            vaccineScheduleTime: item.vaccineScheduleTime,
+            customerScheduleId: item.id
+        }));
+        const res    = await postMethodPayload('/api/vnpay/urlpayment', paymentDto);
+        const result = await res.json();
+        if (res.status < 300) {
+            window.open(result.url, '_blank');
+            setShowPayModal(false);
+            toast.info("Đã mở trang thanh toán VNPay! Vui lòng hoàn tất giao dịch.");
+        } else if (res.status === 417) {
+            toast.warning(result.defaultMessage);
+        } else {
+            toast.error("Không tạo được link thanh toán VNPay");
+        }
+    }
     // (removed showPaymentModal/paypalProcessing — pay-later đã bị bỏ)
 
     /* ── State + handler cho modal Lịch sử đổi lịch ── */
@@ -448,11 +517,11 @@ function LichDaDangKy() {
 
     useEffect(() => {
         const getItem = async () => {
-            var response = await getMethod('/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&page=' + 0);
+            var response = await getMethod('/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&bookingForOther=' + bookingForOtherFilter + '&page=' + 0);
             var result   = await response.json();
             setCustomerSchedule(result.content);
             setpageCount(result.totalPages);
-            url = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&page=';
+            url = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&bookingForOther=' + bookingForOtherFilter + '&page=';
         };
         getItem();
 
@@ -467,15 +536,15 @@ function LichDaDangKy() {
             setNurses(await response.json());
         };
         getNurse();
-    }, []);
+    }, [bookingForOtherFilter]);
 
     /* ── reload schedule list ────────────────── */
     const reloadSchedule = async () => {
-        var response = await getMethod('/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&page=0');
+        var response = await getMethod('/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&bookingForOther=' + bookingForOtherFilter + '&page=0');
         var result   = await response.json();
         setCustomerSchedule(result.content);
         setpageCount(result.totalPages);
-        url = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&page=';
+        url = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&bookingForOther=' + bookingForOtherFilter + '&page=';
     };
 
     /* ── Tải giấy xác nhận tiêm chủng (PDF) ─── */
@@ -550,7 +619,7 @@ function LichDaDangKy() {
         var search = document.getElementById('search').value;
         var from   = document.getElementById('from').value;
         var to     = document.getElementById('to').value;
-        var curUrl = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc';
+        var curUrl = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&bookingForOther=' + bookingForOtherFilter;
         if (search !== '') curUrl += '&search=' + search;
         if (from   !== '') curUrl += '&from='   + from;
         if (to     !== '') curUrl += '&to='     + to;
@@ -563,7 +632,7 @@ function LichDaDangKy() {
     }
 
     async function loadDuLieu() {
-        url = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&page=';
+        url = '/api/customer-schedule/customer/my-schedule?&size=' + size + '&sort=id,desc&bookingForOther=' + bookingForOtherFilter + '&page=';
         var response = await getMethod(url + 0);
         var result   = await response.json();
         setCustomerSchedule(result.content);
@@ -573,9 +642,69 @@ function LichDaDangKy() {
         document.getElementById('to').value     = '';
     }
 
+    async function submitRefundBank(event) {
+        event.preventDefault();
+        const body = {
+            bankName: event.target.elements.bankName.value,
+            bankAccount: event.target.elements.bankAccount.value,
+            bankAccountName: event.target.elements.bankAccountName.value,
+        };
+        if (!body.bankName || !body.bankAccount || !body.bankAccountName) {
+            toast.warning('Vui lòng nhập đầy đủ thông tin tài khoản ngân hàng');
+            return;
+        }
+        try {
+            const res = await postMethodPayload(`/api/customer-schedule/customer/submit-refund-bank/${refundItem.id}`, body);
+            if (res.status < 300) {
+                toast.success('Gửi thông tin ngân hàng thành công! Vui lòng chờ Admin chuyển tiền.');
+                setRefundItem(null);
+                await reloadSchedule();
+            } else {
+                toast.error('Gửi thông tin thất bại. Vui lòng thử lại.');
+            }
+        } catch (e) {
+            toast.error('Lỗi kết nối');
+        }
+    }
+
     /* ── render ───────────────────────────────── */
     return (
         <>
+            {/* ── Tabs Navigation ────────────────────── */}
+            <div style={{
+                display: 'flex', gap: '8px', marginBottom: '16px',
+                borderBottom: `1px solid ${BORDER}`, paddingBottom: '12px'
+            }}>
+                <button
+                    onClick={() => setBookingForOtherFilter(false)}
+                    style={{
+                        padding: '10px 20px', borderRadius: '8px',
+                        border: 'none',
+                        background: !bookingForOtherFilter ? `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})` : '#f1f5f9',
+                        color: !bookingForOtherFilter ? '#fff' : TEXT_2,
+                        fontWeight: '700', fontSize: '13.5px', cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: !bookingForOtherFilter ? '0 4px 6px -1px rgba(14, 165, 233, 0.2)' : 'none'
+                    }}
+                >
+                    👤 Lịch tiêm của tôi
+                </button>
+                <button
+                    onClick={() => setBookingForOtherFilter(true)}
+                    style={{
+                        padding: '10px 20px', borderRadius: '8px',
+                        border: 'none',
+                        background: bookingForOtherFilter ? `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})` : '#f1f5f9',
+                        color: bookingForOtherFilter ? '#fff' : TEXT_2,
+                        fontWeight: '700', fontSize: '13.5px', cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: bookingForOtherFilter ? '0 4px 6px -1px rgba(14, 165, 233, 0.2)' : 'none'
+                    }}
+                >
+                    👶 Lịch đặt hộ người thân
+                </button>
+            </div>
+
             {/* ── Filter bar ────────────────────────── */}
             <div style={{
                 background: BG_ROW, borderRadius: '12px',
@@ -615,9 +744,9 @@ function LichDaDangKy() {
             {/* ── Table ─────────────────────────────── */}
             <div style={{ overflowX: 'auto', borderRadius: '12px', border: `1px solid ${BORDER}` }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px', color: TEXT }}>
-                    <thead>
+                     <thead>
                         <tr style={{ background: `linear-gradient(90deg, ${PRIMARY} 0%, #1e4fad 100%)`, color: '#fff' }}>
-                            {['Mã ĐK', 'Vaccine', 'Trung tâm', 'Ngày đăng ký', 'Ngày tiêm', 'Thanh toán', 'Trạng thái', 'Tình trạng SK', 'Chức năng', 'Phản hồi', 'Giấy xác nhận', 'Hủy lịch'].map((h, i) => (
+                            {['Mã ĐK', 'Người được tiêm', 'Vaccine', 'Trung tâm', 'Ngày đăng ký', 'Ngày tiêm', 'Thanh toán', 'Trạng thái', 'Tình trạng SK', 'Chức năng', 'Phản hồi', 'Giấy xác nhận', 'Hủy lịch'].map((h, i) => (
                                 <th key={i} style={{ padding: '12px 14px', fontWeight: '700', whiteSpace: 'nowrap', textAlign: 'left', fontSize: '12px', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                                     {h}
                                 </th>
@@ -644,6 +773,17 @@ function LichDaDangKy() {
                                     <td style={{ padding: '12px 14px', fontWeight: '700', color: PRIMARY }}>
                                         #{item.id}
                                     </td>
+                                    <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                                        <div style={{ fontWeight: '600', color: TEXT }}>{item.fullName}</div>
+                                        <div style={{ color: TEXT_2, fontSize: '12px', marginTop: '2px' }}>
+                                            🎂 {formatDate(item.dob)}
+                                        </div>
+                                        {item.phone && (
+                                            <div style={{ color: TEXT_2, fontSize: '12.5px', marginTop: '2px' }}>
+                                                📞 {item.phone}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td style={{ padding: '12px 14px', maxWidth: '160px' }}>
                                         <div style={{ fontWeight: '600', lineHeight: '1.4' }}>
                                             {item.vaccineScheduleTime.vaccineSchedule.vaccine.name}
@@ -664,7 +804,7 @@ function LichDaDangKy() {
                                         </div>
                                     </td>
                                     <td style={{ padding: '12px 14px' }}>
-                                        <PayBadge paid={item.customerSchedulePay !== 'CHUA_THANH_TOAN'} />
+                                        <PayBadge status={item.payStatus} />
                                     </td>
                                     <td style={{ padding: '12px 14px' }}>
                                         <StatusBadge status={item.statusCustomerSchedule} />
@@ -683,6 +823,28 @@ function LichDaDangKy() {
                                                 >
                                                     🔄 Đổi lịch
                                                 </ActionBtnBs>
+                                            )}
+                                            {canPayOnline(item) && (
+                                                <ActionBtn
+                                                    color="#10b981"
+                                                    onClick={() => openPaymentModal(item)}
+                                                >
+                                                    💵 Thanh toán ngay
+                                                </ActionBtn>
+                                            )}
+                                            {item.payStatus === 'REFUND_PENDING' && (
+                                                item.bankAccount ? (
+                                                    <span style={{ fontSize: '11px', color: TEXT_2, fontStyle: 'italic', background: '#f1f5f9', padding: '4px 8px', borderRadius: '6px' }}>
+                                                        🏦 Đã gửi thông tin nhận hoàn tiền
+                                                    </span>
+                                                ) : (
+                                                    <ActionBtnBs
+                                                        color="#f59e0b"
+                                                        onClick={() => setRefundItem(item)}
+                                                    >
+                                                        🏦 Nhập STK hoàn tiền
+                                                    </ActionBtnBs>
+                                                )
                                             )}
                                             {(item.counterChange ?? 0) > 0 && (
                                                 <button
@@ -743,7 +905,7 @@ function LichDaDangKy() {
                         })}
                         {customerSchedule.length === 0 && (
                             <tr>
-                                <td colSpan={12} style={{ padding: '48px', textAlign: 'center', color: TEXT_2 }}>
+                                <td colSpan={13} style={{ padding: '48px', textAlign: 'center', color: TEXT_2 }}>
                                     <div style={{ fontSize: '32px', marginBottom: '12px' }}>📋</div>
                                     Chưa có lịch tiêm nào
                                 </td>
@@ -916,6 +1078,225 @@ function LichDaDangKy() {
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={() => setHistoryItem(null)}>Đóng</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Nhập STK Hoàn tiền */}
+            {refundItem && (
+                <div
+                    className="modal fade show"
+                    style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
+                    tabIndex="-1"
+                    onClick={() => setRefundItem(null)}
+                >
+                    <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+                        <div className="modal-content" style={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+                            <div className="modal-header" style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`, color: '#fff', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+                                <h5 className="modal-title" style={{ color: '#fff', fontWeight: '700' }}>
+                                    🏦 Nhập thông tin hoàn tiền
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setRefundItem(null)}></button>
+                            </div>
+                            <form onSubmit={submitRefundBank}>
+                                <div className="modal-body" style={{ padding: '24px' }}>
+                                    <p style={{ fontSize: '13.5px', color: TEXT_2, marginBottom: '16px', lineHeight: '1.5' }}>
+                                        Lịch hẹn <strong>#{refundItem.id}</strong> đã thanh toán của bạn đã bị hủy. Vui lòng cung cấp số tài khoản để trung tâm hoàn lại tiền (chiết khấu 5% hoặc nguyên giá tùy giao dịch).
+                                    </p>
+                                    
+                                    <div style={{ marginBottom: '14px' }}>
+                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: TEXT, marginBottom: '6px' }}>
+                                            Tên ngân hàng <span style={{ color: DANGER }}>*</span>
+                                        </label>
+                                        <select 
+                                            name="bankName" 
+                                            defaultValue=""
+                                            required
+                                            style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1.5px solid ${BORDER}`, fontSize: '14px', outline: 'none' }}
+                                        >
+                                            <option value="" disabled>-- Chọn ngân hàng --</option>
+                                            <option value="Vietcombank">Vietcombank (VCB)</option>
+                                            <option value="Techcombank">Techcombank (TCB)</option>
+                                            <option value="MB Bank">MB Bank (MB)</option>
+                                            <option value="BIDV">BIDV</option>
+                                            <option value="VietinBank">VietinBank</option>
+                                            <option value="Agribank">Agribank</option>
+                                            <option value="ACB">ACB</option>
+                                            <option value="TPBank">TPBank</option>
+                                            <option value="VPBank">VPBank</option>
+                                            <option value="VIB">VIB</option>
+                                            <option value="Sacombank">Sacombank</option>
+                                            <option value="DongA Bank">DongA Bank</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div style={{ marginBottom: '14px' }}>
+                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: TEXT, marginBottom: '6px' }}>
+                                            Số tài khoản nhận tiền <span style={{ color: DANGER }}>*</span>
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            name="bankAccount" 
+                                            required 
+                                            placeholder="Nhập số tài khoản ngân hàng..."
+                                            style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1.5px solid ${BORDER}`, fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                    
+                                    <div style={{ marginBottom: '14px' }}>
+                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: TEXT, marginBottom: '6px' }}>
+                                            Tên chủ tài khoản <span style={{ color: DANGER }}>*</span>
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            name="bankAccountName" 
+                                            required 
+                                            placeholder="Ví dụ: NGUYEN VAN A"
+                                            style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1.5px solid ${BORDER}`, fontSize: '14px', outline: 'none', boxSizing: 'border-box', textTransform: 'uppercase' }}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="modal-footer" style={{ borderTop: `1px solid ${BORDER}`, padding: '12px 24px' }}>
+                                    <button type="button" className="btn btn-secondary" onClick={() => setRefundItem(null)} style={{ borderRadius: '8px' }}>Hủy</button>
+                                    <button type="submit" className="btn btn-primary" style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`, border: 'none', borderRadius: '8px', padding: '8px 20px', fontWeight: '600' }}>Gửi thông tin</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Modal Thanh toán ────────────────────── */}
+            {showPayModal && paymentItem && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '16px'
+                }}>
+                    <div style={{
+                        background: '#fff', borderRadius: '16px', width: '100%',
+                        maxWidth: '480px', padding: '24px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                        position: 'relative'
+                    }}>
+                        <button
+                            onClick={() => setShowPayModal(false)}
+                            style={{
+                                position: 'absolute', top: '16px', right: '16px',
+                                background: 'none', border: 'none', fontSize: '20px',
+                                color: TEXT_2, cursor: 'pointer'
+                            }}
+                        >
+                            ✕
+                        </button>
+                        
+                        <h4 style={{ fontWeight: 700, color: PRIMARY, marginBottom: '8px', fontSize: '18px' }}>
+                            Thanh toán lịch hẹn #{paymentItem.id}
+                        </h4>
+                        <p style={{ color: TEXT_2, fontSize: '13.5px', marginBottom: '20px' }}>
+                            Vui lòng hoàn tất thanh toán trong thời gian giữ chỗ (30 phút từ lúc đăng ký) để hưởng ưu đãi giảm 5%.
+                        </p>
+
+                        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                                <span style={{ color: TEXT_2 }}>Vaccine:</span>
+                                <strong style={{ color: TEXT, textAlign: 'right', maxWidth: '240px', wordBreak: 'break-word' }}>{paymentItem.vaccineScheduleTime.vaccineSchedule.vaccine.name}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                                <span style={{ color: TEXT_2 }}>Người được tiêm:</span>
+                                <span style={{ color: TEXT, fontWeight: 600 }}>{paymentItem.fullName}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: `1px dashed ${BORDER}`, fontSize: '15px' }}>
+                                <span style={{ color: TEXT, fontWeight: 700 }}>Số tiền cần đóng:</span>
+                                <strong style={{ color: SUCCESS, fontSize: '17px' }}>
+                                    {paymentItem.price?.toLocaleString('vi-VN')} đ <span style={{ fontSize: '11px', color: TEXT_2, fontWeight: 'normal' }}>(Giảm 5%)</span>
+                                </strong>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <button
+                                onClick={() => requestPayMentVnpay(paymentItem)}
+                                style={{
+                                    padding: '12px', borderRadius: '10px',
+                                    background: '#0284c7', color: '#fff', border: 'none',
+                                    fontWeight: '700', fontSize: '14px', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                    transition: 'background 0.2s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#0369a1'}
+                                onMouseLeave={e => e.currentTarget.style.background = '#0284c7'}
+                            >
+                                💳 Thanh toán qua VNPay
+                            </button>
+
+                            <div style={{ borderTop: `1px solid ${BORDER}`, margin: '8px 0', position: 'relative', textAlign: 'center' }}>
+                                <span style={{ background: '#fff', padding: '0 8px', fontSize: '12px', color: TEXT_2, position: 'relative', top: '-10px' }}>Hoặc</span>
+                            </div>
+
+                            <PayPalScriptProvider options={{ clientId: PAYPAL_CLIENT_ID, currency: 'USD', intent: 'capture', components: 'buttons', environment: 'sandbox' }}>
+                                <div style={{ minHeight: '80px' }}>
+                                    {paypalProcessing ? (
+                                        <div style={{ textAlign: 'center', padding: '12px', color: TEXT_2, fontSize: '13.5px' }}>
+                                            ⏳ Đang xử lý giao dịch PayPal...
+                                        </div>
+                                    ) : (
+                                        <PayPalButtons
+                                            style={{ layout: 'vertical', label: 'paypal', height: 42 }}
+                                            createOrder={(data, actions) => {
+                                                return actions.order.create({
+                                                    purchase_units: [{
+                                                        amount: {
+                                                            value: convertVndToUsd(paymentItem.price),
+                                                            currency_code: 'USD',
+                                                        },
+                                                        description: paymentItem.vaccineScheduleTime.vaccineSchedule.vaccine.name || 'Vaccine',
+                                                    }],
+                                                    application_context: { shipping_preference: 'NO_SHIPPING' },
+                                                });
+                                            }}
+                                            onApprove={async (data, actions) => {
+                                                setPaypalProcessing(true);
+                                                try {
+                                                    const orderId = data?.orderID;
+                                                    if (!orderId) throw new Error('Không lấy được orderID từ PayPal');
+                                                    
+                                                    const res = await postMethodPayload(
+                                                        `/api/customer-schedule/customer/finish-payment-schedule?id=${paymentItem.id}`,
+                                                        { orderId, payType: 'PAYPAL' }
+                                                    );
+                                                    
+                                                    if (res.status < 300) {
+                                                        setShowPayModal(false);
+                                                        import('sweetalert2').then((module) => {
+                                                            const Swal = module.default;
+                                                            Swal.fire({
+                                                                title: 'Thanh toán thành công! 🎉',
+                                                                text: 'Đăng ký và thanh toán tiêm chủng thành công.',
+                                                                icon: 'success',
+                                                                preConfirm: () => { reloadSchedule(); },
+                                                            });
+                                                        });
+                                                    } else {
+                                                        const text = await res.text();
+                                                        toast.error(`Xử lý thanh toán thất bại: ${text}`);
+                                                    }
+                                                } catch (err) {
+                                                    console.error('[PayPal] error:', err);
+                                                    toast.error(`Lỗi PayPal: ${err?.message || String(err)}`);
+                                                } finally {
+                                                    setPaypalProcessing(false);
+                                                }
+                                            }}
+                                            onError={(err) => {
+                                                console.error('[PayPal SDK] error:', err);
+                                                toast.error('Lỗi khởi tạo PayPal SDK');
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            </PayPalScriptProvider>
                         </div>
                     </div>
                 </div>

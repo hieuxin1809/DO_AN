@@ -42,21 +42,24 @@ const blurStyle = (e) => {
 };
 
 /* Card chọn phương thức thanh toán */
-function PaymentMethodCard({ inputId, value, title, subtitle, icon, onClick }) {
+function PaymentMethodCard({ inputId, value, title, subtitle, icon, onClick, checked }) {
     return (
         <label
             htmlFor={inputId}
-            onClick={onClick}
+            onClick={(e) => {
+                e.preventDefault();
+                onClick();
+            }}
             style={{
                 display:'flex', alignItems:'center', gap:'14px',
                 padding:'14px 16px', borderRadius:'12px',
-                border:`2px solid ${B}`, background:'#fff', cursor:'pointer',
+                border:`2px solid ${checked ? ACCENT : B}`, background: checked ? 'rgba(14,165,233,0.03)' : '#fff', cursor:'pointer',
                 transition:'all 0.18s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.background = 'rgba(14,165,233,0.03)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = B; e.currentTarget.style.background = '#fff'; }}
+            onMouseEnter={e => { if (!checked) { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.background = 'rgba(14,165,233,0.03)'; } }}
+            onMouseLeave={e => { if (!checked) { e.currentTarget.style.borderColor = B; e.currentTarget.style.background = '#fff'; } }}
         >
-            <input type="radio" name="paytype" id={inputId} value={value}
+            <input type="radio" name="paytype" id={inputId} value={value} checked={checked} onChange={onClick}
                 style={{ accentColor: ACCENT, transform:'scale(1.2)', cursor:'pointer' }} />
             <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:'14px', fontWeight:'700', color:T }}>{title}</div>
@@ -197,9 +200,10 @@ function XacNhanDangky() {
     const [patientInfo,      setPatientInfo]      = useState(null); // {fullName, dob, phone, address}
     const [missingInfo,      setMissingInfo]      = useState(false);
 
-    /* Reservation state — slot bị hold trong 15 phút */
+    /* Reservation state — slot bị hold trong 30 phút */
     const [reservationId, setReservationId] = useState(null);
     const [holdSecondsLeft, setHoldSecondsLeft] = useState(0);
+    const [selectedPayType, setSelectedPayType] = useState('paylater');
 
     /* Countdown tick */
     useEffect(() => {
@@ -208,7 +212,7 @@ function XacNhanDangky() {
             setHoldSecondsLeft(s => {
                 if (s <= 1) {
                     clearInterval(t);
-                    toast.warning('Đã hết thời gian giữ chỗ. Vui lòng đặt lại.');
+                    toast.warning('Đã hết thời gian giữ chỗ ưu đãi. Đơn hàng tự động chuyển sang thanh toán tại quầy (Giá gốc 100%).');
                     setShowPaypalModal(false);
                     setReservationId(null);
                     return 0;
@@ -251,9 +255,9 @@ function XacNhanDangky() {
         fetchData();
     }, []);
 
-    function vnpayClick()  { document.getElementById('paytype-vnpay').click(); }
-    function paypalClick() { document.getElementById('paytype-paypal').click(); }
-    function paylaterClick() { document.getElementById('paytype-paylater').click(); }
+    function vnpayClick()  { setSelectedPayType('vnpay'); }
+    function paypalClick() { setSelectedPayType('paypal'); }
+    function paylaterClick() { setSelectedPayType('paylater'); }
 
     function getPayload(/* event */) {
         if (!patientInfo) {
@@ -292,7 +296,7 @@ function XacNhanDangky() {
         }
         if (!window.confirm('Xác nhận đăng ký tiêm')) return;
 
-        const paytype = event.target.elements.paytype.value;
+        const paytype = selectedPayType;
         if (paytype !== 'paypal' && paytype !== 'vnpay' && paytype !== 'paylater') {
             toast.warning('Vui lòng chọn hình thức thanh toán!');
             return;
@@ -332,7 +336,7 @@ function XacNhanDangky() {
         }
         const reserveData = await reserveRes.json();
         const csId = reserveData.customerScheduleId;
-        const secs = reserveData.expiresInSeconds || (15 * 60);
+        const secs = reserveData.expiresInSeconds || (30 * 60);
         setReservationId(csId);
         setHoldSecondsLeft(secs);
 
@@ -347,7 +351,13 @@ function XacNhanDangky() {
     async function requestPayMentVnpay(event, customerScheduleId, payload) {
         const urlmain    = window.location.origin;
         const returnurl  = urlmain + '/thong-bao';
-        const paymentDto = { content: 'Thanh toán', returnUrl: returnurl, notifyUrl: returnurl, idScheduleTime: payload.vaccineScheduleTime.id };
+        const paymentDto = { 
+            content: 'Thanh toán', 
+            returnUrl: returnurl, 
+            notifyUrl: returnurl, 
+            idScheduleTime: payload.vaccineScheduleTime.id,
+            customerScheduleId: customerScheduleId
+        };
         // Lưu cả reservation id để /thong-bao dùng khi callback
         localStorage.setItem('thongtindangky', JSON.stringify({ ...payload, customerScheduleId }));
         const res    = await postMethodPayload('/api/vnpay/urlpayment', paymentDto);
@@ -358,11 +368,10 @@ function XacNhanDangky() {
 
     /* ── PayPal handlers ─────────────────────────── */
     function handlePaypalCreateOrder(data, actions) {
-        const price = vaccineTime?.vaccineSchedule?.vaccine?.price || 0;
         return actions.order.create({
             purchase_units: [{
                 amount: {
-                    value:         toUSD(price),
+                    value:         finalPriceUSD,
                     currency_code: 'USD',
                 },
                 description: vaccineTime?.vaccineSchedule?.vaccine?.name || 'Vaccine',
@@ -421,6 +430,9 @@ function XacNhanDangky() {
     }
 
     const priceVND = vaccineTime?.vaccineSchedule?.vaccine?.price || 0;
+    const isOnline = selectedPayType === 'paypal' || selectedPayType === 'vnpay';
+    const finalPriceVND = isOnline ? priceVND * 0.95 : priceVND;
+    const finalPriceUSD = toUSD(finalPriceVND);
     const priceUSD = toUSD(priceVND);
 
     return (
@@ -567,8 +579,9 @@ function XacNhanDangky() {
                                         <PaymentMethodCard
                                             onClick={paypalClick}
                                             inputId="paytype-paypal" value="paypal"
+                                            checked={selectedPayType === 'paypal'}
                                             title="Thanh toán qua PayPal"
-                                            subtitle={`Quy đổi ~$${priceUSD} USD`}
+                                            subtitle={`Giảm giá 5% online (~$${finalPriceUSD} USD)`}
                                             icon={(
                                                 <svg width="64" height="22" viewBox="0 0 100 32" xmlns="http://www.w3.org/2000/svg">
                                                     <text x="0" y="24" fontFamily="Arial" fontWeight="bold" fontSize="26" fill="#003087">Pay</text>
@@ -580,15 +593,18 @@ function XacNhanDangky() {
                                         <PaymentMethodCard
                                             onClick={vnpayClick}
                                             inputId="paytype-vnpay" value="vnpay"
+                                            checked={selectedPayType === 'vnpay'}
                                             title="Thanh toán qua VNPay"
+                                            subtitle="Giảm giá 5% khi thanh toán trực tuyến"
                                             icon={<img src={vnpay} alt="VNPay" style={{ height:'28px', objectFit:'contain' }} />}
                                         />
                                         {/* Pay later card */}
                                         <PaymentMethodCard
                                             onClick={paylaterClick}
                                             inputId="paytype-paylater" value="paylater"
+                                            checked={selectedPayType === 'paylater'}
                                             title="Thanh toán sau tại trung tâm"
-                                            subtitle="Đóng tiền mặt/quẹt thẻ khi đến tiêm"
+                                            subtitle="Đóng tiền mặt/quẹt thẻ (Giá gốc 100%)"
                                             icon={(
                                                 <span style={{ fontSize: '24px' }}>🏦</span>
                                             )}
@@ -657,12 +673,22 @@ function XacNhanDangky() {
                                             <div style={{ fontSize:'12px', color:T2, fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.4px' }}>
                                                 Tổng thanh toán
                                             </div>
-                                            <div style={{ fontSize:'24px', fontWeight:'800', color:PRIMARY, marginTop:'4px' }}>
-                                                {formatMoney(priceVND)}
+                                            {isOnline && (
+                                                <div style={{ fontSize:'13px', color:D, textDecoration:'line-through', marginTop:'4px' }}>
+                                                    {formatMoney(priceVND)}
+                                                </div>
+                                            )}
+                                            <div style={{ fontSize:'24px', fontWeight:'800', color:PRIMARY, marginTop:'2px' }}>
+                                                {formatMoney(finalPriceVND)}
                                             </div>
+                                            {isOnline && (
+                                                <div style={{ fontSize:'11.5px', color:SUCCESS, fontWeight:'700', marginTop:'2px' }}>
+                                                    🎉 Tiết kiệm 5% khi thanh toán trực tuyến
+                                                </div>
+                                            )}
                                         </div>
                                         <div style={{ fontSize:'12.5px', color:T2, fontWeight:'600', textAlign:'right' }}>
-                                            ≈ ${priceUSD}<br/><span style={{ fontSize:'11px' }}>USD (PayPal)</span>
+                                            ≈ ${finalPriceUSD}<br/><span style={{ fontSize:'11px' }}>USD (PayPal)</span>
                                         </div>
                                     </div>
                                 </div>
@@ -699,8 +725,8 @@ function XacNhanDangky() {
                             <div>
                                 <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: T }}>Thanh toán qua PayPal</h3>
                                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: T2 }}>
-                                    {vaccineTime?.vaccineSchedule?.vaccine?.name} — {formatMoney(priceVND)}
-                                    <span style={{ marginLeft: '6px', color: '#003087', fontWeight: '600' }}>(${priceUSD} USD)</span>
+                                    {vaccineTime?.vaccineSchedule?.vaccine?.name} — {formatMoney(finalPriceVND)}
+                                    <span style={{ marginLeft: '6px', color: '#003087', fontWeight: '600' }}>(${finalPriceUSD} USD)</span>
                                 </p>
                             </div>
                             {!paypalProcessing && (

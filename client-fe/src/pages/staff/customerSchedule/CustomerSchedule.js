@@ -75,7 +75,10 @@ const CustomerSchedule = () => {
   const [items,      setItems]      = useState([]);
   const [loading,    setLoading]    = useState(false);
   const [formErrors, setFormErrors] = useState({});
-  const [formSearch, setFormSearch] = useState({ fullName: '', status: '', page: 1, limit: 10 });
+  const [formSearch, setFormSearch] = useState({ fullName: '', status: '', payStatus: '', vaccineScheduleId: '', page: 1, limit: 10 });
+  const [activeTab,  setActiveTab]  = useState('schedules'); // 'schedules' or 'refunds'
+  const [confirmRefundItem, setConfirmRefundItem] = useState(null);
+  const [refundNotes, setRefundNotes] = useState('');
 
   /* schedule selection */
   const [vaccineSchedules,  setVaccineSchedules]  = useState([]);
@@ -97,7 +100,7 @@ const CustomerSchedule = () => {
     setAvailableDates([]); setAvailableTimes([]);
   };
 
-  useEffect(() => { if (modalOpen) loadVaccineSchedules(); }, [modalOpen]);
+  useEffect(() => { loadVaccineSchedules(); }, []);
 
   /* Load list doctor cho dropdown gán */
   useEffect(() => {
@@ -108,6 +111,47 @@ const CustomerSchedule = () => {
       .then(setDoctors)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'refunds') {
+      setFormSearch(f => ({ ...f, status: '', payStatus: 'REFUND_PENDING', vaccineScheduleId: '', page: 1 }));
+    } else {
+      setFormSearch(f => ({ ...f, status: '', payStatus: '', vaccineScheduleId: '', page: 1 }));
+    }
+    setCurPage(1);
+  }, [activeTab]);
+
+  const handleOpenConfirmRefund = (item) => {
+    setConfirmRefundItem(item);
+    setRefundNotes('');
+  };
+
+  const handleConfirmRefundSubmit = async () => {
+    if (!refundNotes.trim()) {
+      AppNotification.warning('Vui lòng nhập ghi chú hoặc mã giao dịch hoàn tiền');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8080/api/customer-schedule/admin/confirm-refund-done/${confirmRefundItem.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ refundNotes }),
+      });
+      if (res.ok) {
+        AppNotification.success('Đã xác nhận hoàn tiền thành công');
+        setConfirmRefundItem(null);
+        loadData(formSearch);
+      } else {
+        AppNotification.error('Xác nhận hoàn tiền thất bại');
+      }
+    } catch {
+      AppNotification.error('Lỗi kết nối');
+    }
+  };
 
   /* Gán bác sĩ cho 1 lịch tiêm */
   const handleAssignDoctor = async (customerScheduleId, doctorId) => {
@@ -288,6 +332,11 @@ const CustomerSchedule = () => {
     { label: 'Đã hoãn', value: 'not_injected' },
   ];
 
+  const refundStatusOptions = [
+    { label: 'Chờ hoàn tiền', value: 'REFUND_PENDING' },
+    { label: 'Đã hoàn tiền', value: 'REFUNDED' },
+  ];
+
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
       <style>{pgCSS}</style>
@@ -314,30 +363,176 @@ const CustomerSchedule = () => {
         </button>
       </div>
 
-      {/* ── filters ── */}
-      <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', marginBottom: 18,
-        border: `1px solid ${B}`, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 220, display: 'flex', alignItems: 'center', gap: 8,
-          border: `1.5px solid ${B}`, borderRadius: 9, padding: '7px 12px' }}>
-          <FontAwesomeIcon icon={faSearch} style={{ color: T2, fontSize: 13 }} />
-          <input placeholder="Tìm theo tên khách hàng..."
-            style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13.5, color: T, background: 'transparent' }}
-            onChange={e => setFormSearch(f => ({ ...f, fullName: e.target.value, page: 1 }))} />
+      {/* ── Navigation Tabs ── */}
+      {isAdmin && (
+        <div style={{ display: 'flex', borderBottom: `2.5px solid ${B}`, marginBottom: 20, gap: 24 }}>
+          <button
+            onClick={() => setActiveTab('schedules')}
+            style={{
+              padding: '10px 16px',
+              background: 'none',
+              border: 'none',
+              fontWeight: '700',
+              fontSize: '15px',
+              color: activeTab === 'schedules' ? P : T2,
+              borderBottom: activeTab === 'schedules' ? `3px solid ${P}` : 'none',
+              cursor: 'pointer',
+              marginBottom: '-2.5px',
+              transition: 'all 0.15s',
+            }}
+          >
+            📋 Quản lý Lịch Đăng Ký
+          </button>
+          <button
+            onClick={() => setActiveTab('refunds')}
+            style={{
+              padding: '10px 16px',
+              background: 'none',
+              border: 'none',
+              fontWeight: '700',
+              fontSize: '15px',
+              color: activeTab === 'refunds' ? P : T2,
+              borderBottom: activeTab === 'refunds' ? `3px solid ${P}` : 'none',
+              cursor: 'pointer',
+              marginBottom: '-2.5px',
+              transition: 'all 0.15s',
+            }}
+          >
+            💸 Danh Sách Hoàn Tiền Trực Tuyến
+          </button>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {statusOptions.map(opt => (
-            <button key={opt.value} onClick={() => setFormSearch(f => ({ ...f, status: opt.value, page: 1 }))} style={{
-              padding: '7px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12.5,
-              transition: 'all .15s',
-              background: formSearch.status === opt.value
-                ? (opt.value ? STATUS_COLOR[opt.value] || P : P)
-                : '#f1f5f9',
-              color: formSearch.status === opt.value ? '#fff' : T2,
+      )}
+
+      {/* ── Advanced Filter Bar ── */}
+      <div style={{
+        background: '#fff', borderRadius: 16, padding: '20px', marginBottom: 20,
+        border: `1px solid ${B}`, boxShadow: '0 2px 8px rgba(0,0,0,.03)'
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+          {/* Tìm kiếm */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: T2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>
+              Tìm kiếm khách hàng
+            </label>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              border: `1.5px solid ${B}`, borderRadius: 9, padding: '7px 12px', background: '#fff'
             }}>
-              {opt.label}
-            </button>
-          ))}
+              <FontAwesomeIcon icon={faSearch} style={{ color: T2, fontSize: 13 }} />
+              <input
+                placeholder="Họ tên khách hàng..."
+                value={formSearch.fullName}
+                onChange={e => setFormSearch(f => ({ ...f, fullName: e.target.value, page: 1 }))}
+                style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13.5, color: T, background: 'transparent' }}
+              />
+              {formSearch.fullName && (
+                <button onClick={() => setFormSearch(f => ({ ...f, fullName: '', page: 1 }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T2, padding: 0 }}>
+                  <FontAwesomeIcon icon={faX} style={{ fontSize: 11 }} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Lịch tiêm / Vaccine */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: T2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>
+              Chiến dịch / Lịch tiêm
+            </label>
+            <select
+              value={formSearch.vaccineScheduleId || ''}
+              onChange={e => setFormSearch(f => ({ ...f, vaccineScheduleId: e.target.value ? Number(e.target.value) : '', page: 1 }))}
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 9, fontSize: 13.5, color: T,
+                border: `1.5px solid ${B}`, outline: 'none', background: '#fff', cursor: 'pointer'
+              }}
+            >
+              <option value="">Tất cả lịch tiêm</option>
+              {vaccineSchedules.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.vaccine?.name || '?'} — {s.center?.centerName || '?'} ({dayjs(s.startDate).format('DD/MM')} - {dayjs(s.endDate).format('DD/MM')})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Trạng thái lịch tiêm (Chỉ hiện khi không ở tab Hoàn tiền) */}
+          {activeTab !== 'refunds' && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: T2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>
+                Trạng thái lịch hẹn
+              </label>
+              <select
+                value={formSearch.status || ''}
+                onChange={e => setFormSearch(f => ({ ...f, status: e.target.value, page: 1 }))}
+                style={{
+                  width: '100%', padding: '9px 12px', borderRadius: 9, fontSize: 13.5, color: T,
+                  border: `1.5px solid ${B}`, outline: 'none', background: '#fff', cursor: 'pointer'
+                }}
+              >
+                {statusOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Trạng thái thanh toán */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: T2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>
+              Trạng thái thanh toán
+            </label>
+            <select
+              value={formSearch.payStatus || ''}
+              onChange={e => setFormSearch(f => ({ ...f, payStatus: e.target.value, page: 1 }))}
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 9, fontSize: 13.5, color: T,
+                border: `1.5px solid ${B}`, outline: 'none', background: '#fff', cursor: 'pointer'
+              }}
+              disabled={activeTab === 'refunds'}
+            >
+              {activeTab === 'refunds' ? (
+                <>
+                  <option value="REFUND_PENDING">Chờ hoàn tiền</option>
+                  <option value="REFUNDED">Đã hoàn tiền</option>
+                </>
+              ) : (
+                <>
+                  <option value="">Tất cả trạng thái</option>
+                  <option value="CHUA_THANH_TOAN">Chưa thanh toán</option>
+                  <option value="DA_THANH_TOAN">Đã thanh toán</option>
+                  <option value="REFUND_PENDING">Chờ hoàn tiền</option>
+                  <option value="REFUNDED">Đã hoàn tiền</option>
+                </>
+              )}
+            </select>
+          </div>
         </div>
+
+        {/* Reset button row */}
+        {(formSearch.fullName || formSearch.vaccineScheduleId || (activeTab !== 'refunds' && formSearch.status) || (activeTab !== 'refunds' && formSearch.payStatus)) && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+            <button
+              onClick={() => {
+                setFormSearch({
+                  fullName: '',
+                  status: '',
+                  payStatus: activeTab === 'refunds' ? 'REFUND_PENDING' : '',
+                  vaccineScheduleId: '',
+                  page: 1,
+                  limit: 10
+                });
+              }}
+              style={{
+                padding: '8px 16px', borderRadius: 9, border: `1.5px solid ${B}`,
+                background: '#fff', color: T2, fontWeight: 700, fontSize: 13,
+                cursor: 'pointer', transition: 'all .15s',
+                display: 'flex', alignItems: 'center', gap: 6
+              }}
+            >
+              <FontAwesomeIcon icon={faXmark} /> Reset bộ lọc
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── table ── */}
@@ -346,7 +541,10 @@ const CustomerSchedule = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['#','Vaccine','Khách hàng','Thanh toán','Ngày tạo','Thời gian KT','Trạng thái','Bác sĩ phụ trách','Hành động'].map(h => (
+                {(activeTab === 'refunds' 
+                  ? ['#', 'Khách hàng', 'Vaccine', 'Số tiền hoàn', 'Tên ngân hàng', 'Số tài khoản', 'Chủ tài khoản', 'Ghi chú hoàn tiền', 'Hành động']
+                  : ['#','Vaccine','Khách hàng','Thanh toán','Ngày tạo','Thời gian KT','Trạng thái','Bác sĩ phụ trách','Hành động']
+                ).map(h => (
                   <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11.5, fontWeight: 700,
                     color: T2, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: `1px solid ${B}`, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -354,113 +552,158 @@ const CustomerSchedule = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
+                <tr><td colSpan={activeTab === 'refunds' ? 9 : 9} style={{ padding: 52, textAlign: 'center', color: T2 }}>Đang tải...</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có dữ liệu</td></tr>
+                <tr><td colSpan={activeTab === 'refunds' ? 9 : 9} style={{ padding: 52, textAlign: 'center', color: T2 }}>Không có dữ liệu</td></tr>
               ) : items.map(item => (
-                <tr key={item.id} style={{ borderBottom: `1px solid ${B}`, transition: 'background .15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ padding: '12px 16px', color: T2, fontWeight: 600, fontSize: 13 }}>{item.stt}</td>
-                  <td style={{ padding: '12px 16px', fontWeight: 700, color: T }}>
-                    {item.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name || '—'}
-                  </td>
-                  <td style={{ padding: '12px 16px', fontWeight: 600, color: T }}>{item.fullName}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
-                      background: item.payStatus ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.1)',
-                      color: item.payStatus ? S : D }}>
-                      {item.payStatus ? 'Đã thanh toán' : 'Chưa thanh toán'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 16px', color: T2, fontSize: 13 }}>
-                    {item.createdDate ? dayjs(item.createdDate).format('HH:mm DD/MM/YY') : '—'}
-                  </td>
-                  <td style={{ padding: '12px 16px', color: T2, fontSize: 13 }}>
-                    {item.completedDate ? dayjs(item.completedDate).format('HH:mm DD/MM/YY') : '—'}
-                  </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-                      background: `${STATUS_COLOR[item.status] || T2}18`, color: STATUS_COLOR[item.status] || T2 }}>
-                      {STATUS_LABEL[item.status] || item.status}
-                    </span>
-                  </td>
-                  {/* Bác sĩ phụ trách */}
-                  <td style={{ padding: '12px 16px' }}>
-                    {item.status === 'cancelled' || item.status === 'finished' ? (
-                      <span style={{ fontSize: 13, color: T }}>
-                        {item.doctor?.fullName || '—'}
+                activeTab === 'refunds' ? (
+                  <tr key={item.id} style={{ borderBottom: `1px solid ${B}`, transition: 'background .15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ padding: '12px 16px', color: T2, fontWeight: 600, fontSize: 13 }}>{item.stt}</td>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: T }}>{item.fullName}</td>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, color: T }}>
+                      {item.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name || '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, color: D }}>
+                      {item.price ? `${item.price.toLocaleString('vi-VN')}đ` : '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: T }}>
+                      {item.bankName || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Chưa nhập</span>}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 600, color: T }}>
+                      {item.bankAccount || '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: T, textTransform: 'uppercase' }}>
+                      {item.bankAccountName || '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px', color: T2, fontSize: 13, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.refundNotes}>
+                      {item.refundNotes || '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {item.payStatusName === 'REFUND_PENDING' ? (
+                        <button 
+                          onClick={() => handleOpenConfirmRefund(item)}
+                          disabled={!item.bankAccount}
+                          style={{
+                            padding: '6px 14px', borderRadius: 8, border: 'none', cursor: !item.bankAccount ? 'not-allowed' : 'pointer',
+                            background: !item.bankAccount ? '#cbd5e1' : `linear-gradient(135deg, ${P}, ${A})`, 
+                            color: '#fff', fontWeight: 700, fontSize: 12.5,
+                            boxShadow: '0 2px 6px rgba(42,56,143,0.15)', transition: 'all 0.15s'
+                          }}
+                        >
+                          💸 Xác nhận đã chuyển tiền
+                        </button>
+                      ) : (
+                        <span style={{ color: S, fontWeight: 700, fontSize: 13 }}>✓ Đã hoàn tiền</span>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={item.id} style={{ borderBottom: `1px solid ${B}`, transition: 'background .15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ padding: '12px 16px', color: T2, fontWeight: 600, fontSize: 13 }}>{item.stt}</td>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, color: T }}>
+                      {item.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name || '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: T }}>{item.fullName}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+                        background: item.payStatusName === 'REFUND_PENDING' ? '#fef3c7' : item.payStatusName === 'REFUNDED' ? '#e5e7eb' : item.payStatus ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.1)',
+                        color: item.payStatusName === 'REFUND_PENDING' ? '#b45309' : item.payStatusName === 'REFUNDED' ? '#4b5563' : item.payStatus ? S : D }}>
+                        {item.payStatusName === 'REFUND_PENDING' ? 'Chờ hoàn tiền' : item.payStatusName === 'REFUNDED' ? 'Đã hoàn tiền' : item.payStatus ? 'Đã thanh toán' : 'Chưa thanh toán'}
                       </span>
-                    ) : (
-                      <select
-                        value={item.doctor?.id || ''}
-                        onChange={(e) => handleAssignDoctor(item.id, e.target.value ? Number(e.target.value) : null)}
-                        style={{
-                          padding: '6px 10px', borderRadius: 7, fontSize: 12.5,
-                          border: `1.5px solid ${B}`, background: '#fff', color: T,
-                          outline: 'none', minWidth: 150,
-                        }}
-                      >
-                        <option value="">— Chọn bác sĩ —</option>
-                        {doctors.map(d => (
-                          <option key={d.id} value={d.id}>
-                            {d.fullName || d.user?.email || `BS#${d.id}`}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {item.status === 'pending' && (<>
-                        <button onClick={() => handleApprove(item.id, 'cancelled')} title="Từ chối" style={{
-                          width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          border: `1.5px solid ${D}22`, background: `${D}11`, color: D, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
-                        }}
-                          onMouseEnter={e => { e.currentTarget.style.background = D; e.currentTarget.style.color = '#fff'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = `${D}11`; e.currentTarget.style.color = D; }}>
-                          <FontAwesomeIcon icon={faXmark} />
-                        </button>
-                        <button onClick={() => handleApprove(item.id, 'confirmed')} title="Duyệt" style={{
-                          width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          border: `1.5px solid ${S}22`, background: `${S}11`, color: S, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
-                        }}
-                          onMouseEnter={e => { e.currentTarget.style.background = S; e.currentTarget.style.color = '#fff'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = `${S}11`; e.currentTarget.style.color = S; }}>
-                          <FontAwesomeIcon icon={faCheck} />
-                        </button>
-                      </>)}
-                      {item.status === 'confirmed' && (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontSize: 11.5, color: T2, fontStyle: 'italic',
-                        }} title="Chỉ bác sĩ phụ trách mới có thể đánh dấu đã tiêm sau khi sàng lọc">
-                          ⏳ Chờ bác sĩ tiêm
+                    </td>
+                    <td style={{ padding: '12px 16px', color: T2, fontSize: 13 }}>
+                      {item.createdDate ? dayjs(item.createdDate).format('HH:mm DD/MM/YY') : '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px', color: T2, fontSize: 13 }}>
+                      {item.completedDate ? dayjs(item.completedDate).format('HH:mm DD/MM/YY') : '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                        background: `${STATUS_COLOR[item.status] || T2}18`, color: STATUS_COLOR[item.status] || T2 }}>
+                        {STATUS_LABEL[item.status] || item.status}
+                      </span>
+                    </td>
+                    {/* Bác sĩ phụ trách */}
+                    <td style={{ padding: '12px 16px' }}>
+                      {item.status === 'cancelled' || item.status === 'finished' ? (
+                        <span style={{ fontSize: 13, color: T }}>
+                          {item.doctor?.fullName || '—'}
                         </span>
+                      ) : (
+                        <select
+                          value={item.doctor?.id || ''}
+                          onChange={(e) => handleAssignDoctor(item.id, e.target.value ? Number(e.target.value) : null)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 7, fontSize: 12.5,
+                            border: `1.5px solid ${B}`, background: '#fff', color: T,
+                            outline: 'none', minWidth: 150,
+                          }}
+                        >
+                          <option value="">— Chọn bác sĩ —</option>
+                          {doctors.map(d => (
+                            <option key={d.id} value={d.id}>
+                              {d.fullName || d.user?.email || `BS#${d.id}`}
+                            </option>
+                          ))}
+                        </select>
                       )}
-                      {!item.payStatus && item.status !== 'cancelled' && (
-                        <button onClick={() => handleConfirmPayment(item.id)} title="Xác nhận đã thanh toán tại quầy" style={{
-                          width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          border: `1.5px solid ${W}22`, background: `${W}11`, color: W, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
-                        }}
-                          onMouseEnter={e => { e.currentTarget.style.background = W; e.currentTarget.style.color = '#fff'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = `${W}11`; e.currentTarget.style.color = W; }}>
-                          💵
-                        </button>
-                      )}
-                      {(item.status === 'pending' || item.status === 'confirmed' || item.status === 'cancelled' || item.status === 'not_injected') && (
-                        <button onClick={() => handleOpenReschedule(item)} title="Đổi lịch hộ" style={{
-                          width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          border: `1.5px solid ${A}22`, background: `${A}11`, color: A, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
-                        }}
-                          onMouseEnter={e => { e.currentTarget.style.background = A; e.currentTarget.style.color = '#fff'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = `${A}11`; e.currentTarget.style.color = A; }}>
-                          🔄
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {item.status === 'pending' && (<>
+                          <button onClick={() => handleApprove(item.id, 'cancelled')} title="Từ chối" style={{
+                            width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            border: `1.5px solid ${D}22`, background: `${D}11`, color: D, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.background = D; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `${D}11`; e.currentTarget.style.color = D; }}>
+                            <FontAwesomeIcon icon={faXmark} />
+                          </button>
+                          <button onClick={() => handleApprove(item.id, 'confirmed')} title="Duyệt" style={{
+                            width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            border: `1.5px solid ${S}22`, background: `${S}11`, color: S, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.background = S; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `${S}11`; e.currentTarget.style.color = S; }}>
+                            <FontAwesomeIcon icon={faCheck} />
+                          </button>
+                        </>)}
+                        {item.status === 'confirmed' && (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontSize: 11.5, color: T2, fontStyle: 'italic',
+                          }} title="Chỉ bác sĩ phụ trách mới có thể đánh dấu đã tiêm sau khi sàng lọc">
+                            ⏳ Chờ bác sĩ tiêm
+                          </span>
+                        )}
+                        {!item.payStatus && item.status !== 'cancelled' && (
+                          <button onClick={() => handleConfirmPayment(item.id)} title="Xác nhận đã thanh toán tại quầy" style={{
+                            width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            border: `1.5px solid ${W}22`, background: `${W}11`, color: W, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.background = W; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `${W}11`; e.currentTarget.style.color = W; }}>
+                            💵
+                          </button>
+                        )}
+                        {(item.status === 'pending' || item.status === 'confirmed' || item.status === 'cancelled' || item.status === 'not_injected') && (
+                          <button onClick={() => handleOpenReschedule(item)} title="Đổi lịch hộ" style={{
+                            width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            border: `1.5px solid ${A}22`, background: `${A}11`, color: A, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.background = A; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `${A}11`; e.currentTarget.style.color = A; }}>
+                            🔄
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
               ))}
             </tbody>
           </table>
@@ -619,6 +862,41 @@ const CustomerSchedule = () => {
             )}
           </div>
         )}
+      </ModalOverlay>
+
+      {/* ── Confirm Refund Modal ── */}
+      <ModalOverlay open={!!confirmRefundItem} onClose={() => setConfirmRefundItem(null)} title="Xác nhận đã chuyển tiền hoàn" size={500}>
+        <div style={{ fontSize: 14, color: T, lineHeight: 1.5 }}>
+          <p>Bạn sắp xác nhận hoàn tất việc chuyển tiền hoàn lại cho khách hàng:</p>
+          <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10, border: `1px solid ${B}`, marginBottom: 16 }}>
+            <div><strong>Khách hàng:</strong> {confirmRefundItem?.fullName}</div>
+            <div><strong>Vaccine:</strong> {confirmRefundItem?.vaccineScheduleTime?.vaccineSchedule?.vaccine?.name}</div>
+            <div><strong>Số tiền hoàn:</strong> {confirmRefundItem?.price?.toLocaleString('vi-VN')}đ</div>
+            <div style={{ marginTop: 8, borderTop: `1px solid ${B}`, paddingTop: 8 }}>
+              <div><strong>Ngân hàng:</strong> {confirmRefundItem?.bankName}</div>
+              <div><strong>Số tài khoản:</strong> {confirmRefundItem?.bankAccount}</div>
+              <div><strong>Chủ tài khoản:</strong> {confirmRefundItem?.bankAccountName}</div>
+            </div>
+          </div>
+          <Field label="Ghi chú hoàn tiền / Mã giao dịch chuyển khoản" required>
+            <input 
+              style={inpStyle()} 
+              placeholder="Nhập mã giao dịch hoặc ghi chú..."
+              value={refundNotes} 
+              onChange={e => setRefundNotes(e.target.value)} 
+            />
+          </Field>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+            <button onClick={() => setConfirmRefundItem(null)} style={{
+              padding: '8px 18px', borderRadius: 8, border: `1.5px solid ${B}`,
+              background: '#fff', color: T2, fontWeight: 700, cursor: 'pointer', fontSize: 13
+            }}>Hủy</button>
+            <button onClick={handleConfirmRefundSubmit} style={{
+              padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: `linear-gradient(135deg, ${P}, ${A})`, color: '#fff', fontWeight: 700, fontSize: 13
+            }}>Xác nhận hoàn tất</button>
+          </div>
+        </div>
       </ModalOverlay>
     </div>
   );
