@@ -188,21 +188,7 @@ const CenterAdmin = () => {
         </button>
       </div>
 
-      {/* stat chips */}
-      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:18 }}>
-        {[
-          { label:'Tổng trung tâm', v:items.length, c:P },
-          { label:'Hà Nội', v:items.filter(c=>c.city?.includes('Hà Nội')||c.city?.includes('Ha Noi')).length, c:A },
-          { label:'TP.HCM', v:items.filter(c=>c.city?.includes('Hồ Chí Minh')||c.city?.includes('Ho Chi Minh')).length, c:S },
-        ].map(s=>(
-          <div key={s.label} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 16px',
-            background:'#fff', borderRadius:10, border:`1px solid ${B}`, boxShadow:'0 1px 4px rgba(0,0,0,.04)' }}>
-            <div style={{ width:8, height:8, borderRadius:'50%', background:s.c }} />
-            <span style={{ fontSize:17, fontWeight:800, color:s.c }}>{s.v}</span>
-            <span style={{ fontSize:12.5, color:T2 }}>{s.label}</span>
-          </div>
-        ))}
-      </div>
+
 
       {/* table card */}
       <div style={{ background:'#fff', borderRadius:16, overflow:'hidden', border:`1px solid ${B}`, boxShadow:'0 2px 12px rgba(0,0,0,.06)' }}>

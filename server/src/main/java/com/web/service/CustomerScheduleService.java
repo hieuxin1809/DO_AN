@@ -122,6 +122,9 @@ public class CustomerScheduleService {
     @Autowired
     private ScheduleChangeHistoryRepository scheduleChangeHistoryRepository;
 
+    @Autowired
+    private CustomerProfileRepository customerProfileRepository;
+
     /** Số lần đổi lịch tối đa cho 1 customer schedule */
     private static final int MAX_CHANGE_TIMES = 3;
     
@@ -319,6 +322,32 @@ public class CustomerScheduleService {
         if (optionalUser.isPresent()) {
             // Nếu đã tồn tại, liên kết lịch hẹn với tài khoản email này
             user = optionalUser.get();
+            // Cập nhật profile nếu còn trống dob hoặc idCard
+            CustomerProfile profile = customerProfileRepository.findByUser(user.getId());
+            if (profile != null) {
+                boolean updated = false;
+                if (profile.getBirthdate() == null && request.getDob() != null) {
+                    profile.setBirthdate(request.getDob());
+                    updated = true;
+                }
+                if ((profile.getIdCard() == null || profile.getIdCard().isEmpty()) && request.getIdCard() != null) {
+                    profile.setIdCard(request.getIdCard());
+                    updated = true;
+                }
+                if (updated) {
+                    customerProfileRepository.save(profile);
+                }
+            } else {
+                CustomerProfile customerProfile = new CustomerProfile();
+                customerProfile.setFullName(request.getFullName());
+                customerProfile.setPhone(request.getPhone());
+                customerProfile.setBirthdate(request.getDob());
+                customerProfile.setIdCard(request.getIdCard());
+                customerProfile.setUser(user);
+                customerProfile.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+                customerProfile.setStreet(request.getAddress());
+                customerProfileRepository.save(customerProfile);
+            }
         } else {
             // Nếu chưa tồn tại email, kiểm tra số điện thoại có bị trùng không
             Optional<User> optionalUserPhone = userRepository.findByPhoneNumber(request.getPhone());
@@ -342,6 +371,16 @@ public class CustomerScheduleService {
                     .actived(true)
                     .build();
             userRepository.save(user);
+
+            CustomerProfile customerProfile = new CustomerProfile();
+            customerProfile.setFullName(request.getFullName());
+            customerProfile.setPhone(request.getPhone());
+            customerProfile.setBirthdate(request.getDob());
+            customerProfile.setIdCard(request.getIdCard());
+            customerProfile.setUser(user);
+            customerProfile.setCreatedDate(new Timestamp(System.currentTimeMillis()));
+            customerProfile.setStreet(request.getAddress());
+            customerProfileRepository.save(customerProfile);
         }
 
         // Bước 2: Xác định khung giờ tiêm (VaccineScheduleTime)
@@ -363,6 +402,8 @@ public class CustomerScheduleService {
                 .phone(request.getPhone())
                 .customerSchedulePay(CustomerSchedulePay.CHUA_THANH_TOAN)
                 .address(request.getAddress())
+                .dob(request.getDob())
+                .idCard(request.getIdCard())
                 .createdDate(new Timestamp(System.currentTimeMillis()))
                 .user(user)
                 .build();
@@ -633,9 +674,9 @@ public class CustomerScheduleService {
             throw new MessageException("Thiếu khung giờ tiêm");
         }
         
-        // Bước 1: Tìm kiếm khung giờ tiêm
+        // Bước 1: Tìm kiếm khung giờ tiêm (Khóa bi quan ngăn đặt trùng)
         VaccineScheduleTime vaccineScheduleTime = vaccineScheduleTimeRepository
-                .findById(customerSchedule.getVaccineScheduleTime().getId())
+                .findByIdForUpdate(customerSchedule.getVaccineScheduleTime().getId())
                 .orElseThrow(() -> new MessageException("Khung giờ không tồn tại"));
 
         // Kiểm tra khung giờ tiêm phải ở tương lai

@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faUserPlus, faEdit, faTrash, faLock, faUnlockAlt,
-  faSearch, faUsers, faX, faChevronDown, faUserMd, faUser, faCamera,
+  faSearch, faUsers, faX, faChevronDown, faUserMd, faUser, faCamera, faEye,
 } from '@fortawesome/free-solid-svg-icons';
 import { uploadSingleFile } from '../../services/request';
 
@@ -172,7 +172,8 @@ const AdminUser = () => {
   const [items,    setItems]    = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [search,   setSearch]   = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  const [filterRole, setFilterRole] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   /* dropdown thêm tài khoản */
   const [addMenu, setAddMenu] = useState(false);
@@ -189,31 +190,56 @@ const AdminUser = () => {
   const [errors,     setErrors]       = useState({});
   const [saving,     setSaving]       = useState(false);
 
-  /* edit modal */
-  const [editOpen,   setEditOpen]    = useState(false);
-  const [editUser,   setEditUser]    = useState(null);
-  const [editForm,   setEditForm]    = useState({ phoneNumber: '', email: '' });
-  const [editSaving, setEditSaving]  = useState(false);
+  /* detail modal */
+  const [detailOpen, setDetailOpen]  = useState(false);
+  const [detailUser, setDetailUser]  = useState(null);
 
   /* load */
-  const loadUsers = async (role = '') => {
+  const loadUsers = async () => {
     setLoading(true);
     try {
-      const url = '/api/user/admin/get-user-by-role' + (role ? `?role=${role}` : '');
+      const url = '/api/user/admin/get-user-by-role';
       const res  = await authFetch(url);
-      setItems(await res.json());
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        // Lọc bỏ tài khoản Y tá (NURSE) và Hỗ trợ (supportStaff)
+        const visibleUsers = data.filter(u => {
+          const roleName = u.authorities?.name?.toUpperCase();
+          return roleName !== 'NURSE' && roleName !== 'SUPPORTSTAFF' && roleName !== 'SUPPORT_STAFF';
+        });
+        setItems(visibleUsers);
+      } else {
+        setItems([]);
+      }
     } catch { toast.error('Không thể tải danh sách người dùng'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { loadUsers(''); }, []);
-
-  const handleRoleFilter = (role) => { setRoleFilter(role); loadUsers(role); };
+  useEffect(() => { loadUsers(); }, []);
 
   /* filtered list */
   const filtered = items.filter(u => {
-    const q = search.toLowerCase();
-    return !q || (u.email || '').toLowerCase().includes(q);
+    // 1. Tìm kiếm theo email, số điện thoại, hoặc tên
+    const q = search.trim().toLowerCase();
+    if (q) {
+      const matchEmail = (u.email || '').toLowerCase().includes(q);
+      const matchPhone = (u.phoneNumber || '').toLowerCase().includes(q);
+      const matchName = (u.fullname || '').toLowerCase().includes(q);
+      if (!matchEmail && !matchPhone && !matchName) return false;
+    }
+
+    // 2. Lọc theo vai trò
+    if (filterRole) {
+      if (u.authorities?.name !== filterRole) return false;
+    }
+
+    // 3. Lọc theo trạng thái hoạt động
+    if (filterStatus) {
+      if (filterStatus === 'active' && !u.actived) return false;
+      if (filterStatus === 'locked' && u.actived) return false;
+    }
+
+    return true;
   });
 
   /* ─── Mở modal tạo theo role ─── */
@@ -277,7 +303,7 @@ const AdminUser = () => {
       if (res.ok) {
         toast.success(`Tạo tài khoản ${ROLE_MAP[createRole].label} thành công!`);
         closeCreate();
-        loadUsers(roleFilter);
+        loadUsers();
       } else {
         toast.error(result.defaultMessage || result.message || 'Tạo tài khoản thất bại');
       }
@@ -285,29 +311,10 @@ const AdminUser = () => {
     finally { setSaving(false); }
   };
 
-  /* ── edit user ── */
-  const openEdit = (user) => {
-    setEditUser(user);
-    setEditForm({ phoneNumber: user.phoneNumber || '', email: user.email || '' });
-    setEditOpen(true);
-  };
-  const handleEditSubmit = async () => {
-    setEditSaving(true);
-    try {
-      const res = await authFetch('/api/user/all/update-infor', {
-        method: 'POST',
-        body: JSON.stringify({ id: editUser.id, ...editForm }),
-      });
-      if (res.ok) {
-        toast.success('Cập nhật thành công!');
-        setItems(prev => prev.map(u => u.id === editUser.id ? { ...u, ...editForm } : u));
-        setEditOpen(false);
-      } else {
-        const d = await res.json().catch(() => ({}));
-        toast.error(d.defaultMessage || d.message || 'Cập nhật thất bại');
-      }
-    } catch { toast.error('Đã xảy ra lỗi'); }
-    finally { setEditSaving(false); }
+  /* ── detail user ── */
+  const openDetail = (user) => {
+    setDetailUser(user);
+    setDetailOpen(true);
   };
 
   /* ── delete ── */
@@ -344,10 +351,7 @@ const AdminUser = () => {
     } else toast.error('Thất bại');
   };
 
-  /* ── stats ── */
-  const stats = ALL_ROLES.map(r => ({
-    role: r, count: items.filter(u => u.authorities?.name === r).length,
-  }));
+
 
   /* Modal title icon */
   const roleIcon = { Customer: faUser, Doctor: faUserMd }[createRole];
@@ -420,48 +424,130 @@ const AdminUser = () => {
         </div>
       </div>
 
-      {/* ── role stat chips ── */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-        <button onClick={() => handleRoleFilter('')} style={{
-          padding: '6px 16px', borderRadius: 20, cursor: 'pointer', fontWeight: 700, fontSize: 13,
-          border: `2px solid ${roleFilter === '' ? PRIMARY : BORDER}`,
-          background: roleFilter === '' ? `rgba(42,56,143,0.08)` : '#fff',
-          color: roleFilter === '' ? PRIMARY : TEXT_2,
-        }}>
-          Tất cả ({items.length})
-        </button>
-        {stats.map(s => {
-          const cfg = ROLE_MAP[s.role];
-          const active = roleFilter === s.role;
-          return (
-            <button key={s.role} onClick={() => handleRoleFilter(s.role)} style={{
-              padding: '6px 16px', borderRadius: 20, cursor: 'pointer', fontWeight: 700, fontSize: 13,
-              border: `2px solid ${active ? cfg.color : BORDER}`,
-              background: active ? cfg.bg : '#fff',
-              color: active ? cfg.color : TEXT_2,
-            }}>
-              {cfg.label} ({s.count})
-            </button>
-          );
-        })}
-      </div>
-
       {/* ── search + table card ── */}
       <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden',
         border: `1px solid ${BORDER}`, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
 
-        {/* search bar */}
-        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${BORDER}`,
-          display: 'flex', alignItems: 'center', gap: 10 }}>
-          <FontAwesomeIcon icon={faSearch} style={{ color: TEXT_2, fontSize: 14, flexShrink: 0 }} />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm theo email..."
-            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: TEXT, background: 'transparent' }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: TEXT_2 }}>
-              <FontAwesomeIcon icon={faX} />
+        {/* Bộ lọc nâng cao */}
+        <div style={{
+          padding: '20px',
+          borderBottom: `1px solid ${BORDER}`,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 16,
+          alignItems: 'center',
+          background: '#f8fafc'
+        }}>
+          {/* Ô tìm kiếm */}
+          <div style={{ flex: '1 1 300px', position: 'relative' }}>
+            <FontAwesomeIcon icon={faSearch} style={{ position: 'absolute', left: 14, top: 14, color: TEXT_2, fontSize: 14 }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Tìm kiếm theo email, số điện thoại, họ tên..."
+              style={{
+                width: '100%',
+                height: 42,
+                padding: '0 12px 0 40px',
+                boxSizing: 'border-box',
+                borderRadius: 9,
+                border: `1.5px solid ${BORDER}`,
+                fontSize: 14,
+                color: TEXT,
+                outline: 'none',
+                background: '#fff',
+                transition: 'border-color .15s, box-shadow .15s'
+              }}
+              onFocus={e => { e.target.style.borderColor = ACCENT; e.target.style.boxShadow = `0 0 0 3px rgba(14,165,233,0.12)`; }}
+              onBlur={e  => { e.target.style.borderColor = BORDER; e.target.style.boxShadow = 'none'; }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 14, top: 13, background: 'none', border: 'none', cursor: 'pointer', color: TEXT_2 }}>
+                <FontAwesomeIcon icon={faX} style={{ fontSize: 12 }} />
+              </button>
+            )}
+          </div>
+
+          {/* Chọn vai trò */}
+          <div style={{ flex: '1 1 180px', position: 'relative' }}>
+            <select
+              value={filterRole}
+              onChange={e => setFilterRole(e.target.value)}
+              style={{
+                width: '100%',
+                height: 42,
+                padding: '0 32px 0 12px',
+                borderRadius: 9,
+                border: `1.5px solid ${BORDER}`,
+                fontSize: 14,
+                color: TEXT,
+                outline: 'none',
+                background: '#fff',
+                appearance: 'none',
+                cursor: 'pointer',
+                fontWeight: 600,
+                boxSizing: 'border-box'
+              }}
+            >
+              <option value="">Tất cả vai trò</option>
+              <option value="Admin">Quản trị viên</option>
+              <option value="Doctor">Bác sĩ</option>
+              <option value="Customer">Khách hàng</option>
+            </select>
+            <FontAwesomeIcon icon={faChevronDown} style={{ position: 'absolute', right: 12, top: 15, color: TEXT_2, fontSize: 12, pointerEvents: 'none' }} />
+          </div>
+
+          {/* Chọn trạng thái */}
+          <div style={{ flex: '1 1 180px', position: 'relative' }}>
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              style={{
+                width: '100%',
+                height: 42,
+                padding: '0 32px 0 12px',
+                borderRadius: 9,
+                border: `1.5px solid ${BORDER}`,
+                fontSize: 14,
+                color: TEXT,
+                outline: 'none',
+                background: '#fff',
+                appearance: 'none',
+                cursor: 'pointer',
+                fontWeight: 600,
+                boxSizing: 'border-box'
+              }}
+            >
+              <option value="">Tất cả trạng thái</option>
+              <option value="active">Hoạt động</option>
+              <option value="locked">Đã khóa</option>
+            </select>
+            <FontAwesomeIcon icon={faChevronDown} style={{ position: 'absolute', right: 12, top: 15, color: TEXT_2, fontSize: 12, pointerEvents: 'none' }} />
+          </div>
+
+          {/* Nút xóa bộ lọc */}
+          {(search || filterRole || filterStatus) && (
+            <button
+              onClick={() => { setSearch(''); setFilterRole(''); setFilterStatus(''); }}
+              style={{
+                height: 42,
+                padding: '0 16px',
+                borderRadius: 9,
+                border: `1.5px solid ${DANGER}33`,
+                background: `${DANGER}11`,
+                color: DANGER,
+                fontWeight: 700,
+                fontSize: 13.5,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = DANGER; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = `${DANGER}11`; e.currentTarget.style.color = DANGER; }}
+            >
+              <FontAwesomeIcon icon={faX} style={{ fontSize: 11 }} /> Xóa bộ lọc
             </button>
           )}
         </div>
@@ -526,7 +612,7 @@ const AdminUser = () => {
                   {/* actions */}
                   <td style={{ padding: '12px 18px' }}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-                      <ActionBtn icon={faEdit} color={WARNING} title="Sửa" onClick={() => openEdit(user)} />
+                      <ActionBtn icon={faEye} color={ACCENT} title="Chi tiết" onClick={() => openDetail(user)} />
                       <ActionBtn icon={faTrash} color={DANGER} title="Xóa" onClick={() => handleDelete(user.id)} />
                       <ActionBtn
                         icon={user.actived ? faLock : faUnlockAlt}
@@ -625,35 +711,57 @@ const AdminUser = () => {
         )}
       </Modal>
 
-      {/* ══ Modal Sửa tài khoản ══ */}
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="✏️ Cập nhật thông tin">
-        {editUser && (
+      {/* ══ Modal Chi tiết tài khoản ══ */}
+      <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="🔍 Chi tiết tài khoản">
+        {detailUser && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-              background: '#f8fafc', borderRadius: 10, marginBottom: 20, border: `1px solid ${BORDER}` }}>
-              <Avatar email={editUser.email} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px',
+              background: '#f8fafc', borderRadius: 12, marginBottom: 20, border: `1.5px solid ${BORDER}` }}>
+              <Avatar name={detailUser.fullname} email={detailUser.email} />
               <div>
-                <div style={{ fontWeight: 700, color: TEXT }}>{editUser.email}</div>
-                <RoleBadge role={editUser.authorities?.name} />
+                <div style={{ fontSize: 13, color: TEXT_2 }}>Mã tài khoản: #{detailUser.id}</div>
+                <div style={{ fontWeight: 700, color: TEXT, fontSize: 15 }}>{detailUser.email}</div>
               </div>
             </div>
-            <FieldRow label="Email">
-              <StyledInput type="email" value={editForm.email}
-                onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
-            </FieldRow>
-            <FieldRow label="Số điện thoại">
-              <StyledInput value={editForm.phoneNumber}
-                onChange={e => setEditForm(f => ({ ...f, phoneNumber: e.target.value }))} />
-            </FieldRow>
-            <div style={{ padding: '10px 12px', background: '#fef3c7', borderRadius: 8,
-              fontSize: 12.5, color: '#92400e', marginBottom: 14, lineHeight: 1.5 }}>
-              💡 Lưu ý: thông tin chuyên môn (chuyên khoa, kinh nghiệm, avatar...) chỉnh ở trang Quản lý Bác sĩ / Y tá.
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, borderBottom: `1px dashed ${BORDER}` }}>
+                <span style={{ fontWeight: 700, color: TEXT_2, fontSize: 13 }}>EMAIL ĐĂNG NHẬP</span>
+                <span style={{ fontWeight: 600, color: TEXT, fontSize: 13.5 }}>{detailUser.email}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, borderBottom: `1px dashed ${BORDER}` }}>
+                <span style={{ fontWeight: 700, color: TEXT_2, fontSize: 13 }}>SỐ ĐIỆN THOẠI</span>
+                <span style={{ fontWeight: 600, color: TEXT, fontSize: 13.5 }}>{detailUser.phoneNumber || '—'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, borderBottom: `1px dashed ${BORDER}` }}>
+                <span style={{ fontWeight: 700, color: TEXT_2, fontSize: 13 }}>NGÀY TẠO</span>
+                <span style={{ fontWeight: 600, color: TEXT, fontSize: 13.5 }}>
+                  {detailUser.createdDate ? String(detailUser.createdDate).split('T')[0] : '—'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, borderBottom: `1px dashed ${BORDER}` }}>
+                <span style={{ fontWeight: 700, color: TEXT_2, fontSize: 13 }}>VAI TRÒ (QUYỀN)</span>
+                <RoleBadge role={detailUser.authorities?.name} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, borderBottom: `1px dashed ${BORDER}` }}>
+                <span style={{ fontWeight: 700, color: TEXT_2, fontSize: 13 }}>TRẠNG THÁI HOẠT ĐỘNG</span>
+                <span style={{
+                  padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                  background: detailUser.actived ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                  color: detailUser.actived ? SUCCESS : DANGER,
+                }}>
+                  {detailUser.actived ? 'Hoạt động' : 'Đang khóa'}
+                </span>
+              </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
-              <button onClick={() => setEditOpen(false)} style={cancelBtnStyle}>Hủy</button>
-              <button onClick={handleEditSubmit} disabled={editSaving} style={submitBtnStyle(editSaving)}>
-                {editSaving ? 'Đang lưu...' : '✓ Lưu thay đổi'}
-              </button>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+              <button onClick={() => setDetailOpen(false)} style={{
+                padding: '9px 24px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                background: `linear-gradient(135deg,${PRIMARY},${ACCENT})`,
+                color: '#fff', fontSize: 13.5, fontWeight: 700,
+                boxShadow: `0 4px 14px rgba(42,56,143,0.3)`
+              }}>Đóng</button>
             </div>
           </>
         )}

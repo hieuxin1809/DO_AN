@@ -192,12 +192,7 @@ const AdminDanhMuc = () => {
         </button>
       </div>
 
-      {/* ── stat chips ── */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-        <StatChip label="Tổng danh mục" value={total} color={PRIMARY} />
-        <StatChip label="Danh mục chính" value={primaryCount} color={SUCCESS} icon={faCheckCircle} />
-        <StatChip label="Danh mục con" value={childCount} color={WARNING} icon={faTag} />
-      </div>
+
 
       {/* ── table card ── */}
       <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden',
@@ -443,18 +438,7 @@ const AdminDanhMuc = () => {
 };
 
 /* ─── helpers ─── */
-function StatChip({ label, value, color, icon }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10,
-      padding: '8px 16px', background: '#fff', borderRadius: 10,
-      border: `1px solid ${BORDER}`, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-      {icon && <FontAwesomeIcon icon={icon} style={{ color, fontSize: 13 }} />}
-      {!icon && <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />}
-      <span style={{ fontSize: 18, fontWeight: 800, color }}>{value}</span>
-      <span style={{ fontSize: 12.5, color: TEXT_2 }}>{label}</span>
-    </div>
-  );
-}
+
 
 function FieldRow({ label, required, children }) {
   return (

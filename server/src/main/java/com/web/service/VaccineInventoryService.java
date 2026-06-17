@@ -17,10 +17,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -52,7 +49,11 @@ public class VaccineInventoryService {
         if (ObjectUtils.isEmpty(requestBody)) {
             throw new MessageException(HttpStatus.BAD_REQUEST.value(), "Đã có lỗi");
         }
-        Pageable pageable = PageRequest.of(requestBody.getPage() - 1, requestBody.getLimit());
+        Pageable pageable = PageRequest.of(
+                requestBody.getPage() - 1,
+                requestBody.getLimit(),
+                Sort.by(Sort.Direction.DESC, "createdDate")
+        );
 
         Page<VaccineInventory> vaccinePage = vaccineInventoryRepository.findAll(
                 specificationVaccineInventoryList(requestBody.getCenterId(), requestBody.getVaccineId(), requestBody.getImportDate()), pageable);

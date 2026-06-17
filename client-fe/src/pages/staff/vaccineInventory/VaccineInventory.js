@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Table, Button, Modal, Pagination, Popconfirm, InputNumber, Select } from "antd";
+import { Table, Button, Modal, Pagination, InputNumber, Select } from "antd";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus, faRemove, faBoxOpen, faDownload, faWarehouse, faFilter } from "@fortawesome/free-solid-svg-icons";
+import { faPlus, faBoxOpen, faDownload, faWarehouse, faFilter } from "@fortawesome/free-solid-svg-icons";
 import dayjs from "dayjs";
 import { AppNotification } from "../../../components/AppNotification";
 import * as XLSX from "xlsx";
@@ -166,16 +166,7 @@ const VaccineInventory = () => {
     } finally { setXuatSaving(false); }
   };
 
-  /* ── delete ── */
-  const handleDelete = async (id) => {
-    try {
-      await VaccineInventoryApi.deleteVaccineInventory({ id });
-      AppNotification.success("Xóa thành công");
-      fetchInventory({ page: currentPage, limit: pageSize, centerId: filterCenterId });
-    } catch (err) {
-      AppNotification.error(err?.response?.data?.defaultMessage || "Xóa thất bại");
-    }
-  };
+
 
   /* ── export excel ── */
   const handleExport = () => {
@@ -290,7 +281,7 @@ const VaccineInventory = () => {
       },
     },
     {
-      title: "Hành động", key: "action", align: "center", width: 180,
+      title: "Hành động", key: "action", align: "center", width: 120,
       render: (_, record) => {
         const expired = record.expirationDate ? dayjs(record.expirationDate).isBefore(dayjs(), "day") : false;
         return (
@@ -316,13 +307,6 @@ const VaccineInventory = () => {
             >
               <FontAwesomeIcon icon={faPlus} style={{ marginRight: 5 }} />Xuất
             </Button>
-            <Popconfirm
-              title="Xóa lô vaccine này?" description="Hành động này không thể hoàn tác."
-              onConfirm={() => handleDelete(record.id)} okText="Xóa" cancelText="Hủy"
-              okButtonProps={{ danger: true }}
-            >
-              <Button danger title="Xóa"><FontAwesomeIcon icon={faRemove} /></Button>
-            </Popconfirm>
           </div>
         );
       }

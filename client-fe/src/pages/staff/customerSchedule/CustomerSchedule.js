@@ -310,6 +310,9 @@ const CustomerSchedule = () => {
     if (!formHandle.phone?.trim())    errs.phone    = 'Vui lòng nhập số điện thoại';
     else if (!/^[0-9]{9,11}$/.test(formHandle.phone)) errs.phone = 'Số điện thoại không hợp lệ';
     if (!formHandle.address?.trim())  errs.address  = 'Vui lòng nhập địa chỉ';
+    if (!formHandle.dob)              errs.dob      = 'Vui lòng chọn ngày sinh';
+    if (!formHandle.idCard?.trim())   errs.idCard   = 'Vui lòng nhập số CCCD';
+    else if (!/^[0-9]{9,12}$/.test(formHandle.idCard)) errs.idCard = 'CCCD không hợp lệ (9-12 chữ số)';
     if (!formHandle.vaccineScheduleId) errs.vaccineScheduleId = 'Vui lòng chọn lịch tiêm';
     if (!formHandle.vaccineScheduleTimeId) errs.vaccineScheduleTimeId = 'Vui lòng chọn giờ tiêm';
     setFormErrors(errs);
@@ -690,7 +693,7 @@ const CustomerSchedule = () => {
                             💵
                           </button>
                         )}
-                        {(item.status === 'pending' || item.status === 'confirmed' || item.status === 'cancelled' || item.status === 'not_injected') && (
+                        {(item.status === 'pending' || item.status === 'confirmed' || item.status === 'not_injected') && (
                           <button onClick={() => handleOpenReschedule(item)} title="Đổi lịch hộ" style={{
                             width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             border: `1.5px solid ${A}22`, background: `${A}11`, color: A, cursor: 'pointer', fontSize: 13, transition: 'all .15s',
@@ -754,6 +757,17 @@ const CustomerSchedule = () => {
           <Field label="Địa chỉ" required error={formErrors.address}>
             <input style={inpStyle(formErrors.address)} placeholder="Nhập địa chỉ"
               value={formHandle.address || ''} onChange={e => handleInput('address', e.target.value)} />
+          </Field>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          <Field label="Ngày sinh" required error={formErrors.dob}>
+            <input type="date" style={inpStyle(formErrors.dob)}
+              value={formHandle.dob || ''} onChange={e => handleInput('dob', e.target.value)} />
+          </Field>
+          <Field label="Số CCCD" required error={formErrors.idCard}>
+            <input style={inpStyle(formErrors.idCard)} placeholder="Nhập số CCCD"
+              value={formHandle.idCard || ''} onChange={e => handleInput('idCard', e.target.value)} />
           </Field>
         </div>
 

@@ -3,6 +3,7 @@ package com.web.repository;
 import com.web.dto.VaccineScheduleTimeResponse;
 import com.web.entity.VaccineScheduleTime;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Pageable;
@@ -39,4 +40,7 @@ public interface VaccineScheduleTimeRepository extends JpaRepository<VaccineSche
     VaccineScheduleTime findFirstByVaccineScheduleId(Long idSchedule);
     List<VaccineScheduleTime> findAllByVaccineScheduleId(Long vaccineScheduleId);
 
+    @Lock(javax.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select v from VaccineScheduleTime v where v.id = :id")
+    java.util.Optional<VaccineScheduleTime> findByIdForUpdate(@Param("id") Long id);
 }

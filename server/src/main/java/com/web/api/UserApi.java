@@ -182,7 +182,7 @@ public class UserApi {
 
     @GetMapping("/admin/get-user-by-role")
     public ResponseEntity<?> getUserByRole(@RequestParam(value = "role", required = false) String role){
-        List<User> users = userService.getUserByRole(role);
+        List<?> users = userService.getUserByRole(role);
         return new ResponseEntity<>(users, HttpStatus.OK);
     }
 

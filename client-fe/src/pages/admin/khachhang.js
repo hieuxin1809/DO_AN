@@ -207,7 +207,7 @@ const AdminKhachHang = () => {
   const fetchPage = async (page) => {
     setLoading(true);
     try {
-      let url = `/api/customer-profile/admin/list-customer?page=${page}&size=${PAGE_SIZE}&sort=id,asc`;
+      let url = `/api/customer-profile/admin/list-customer?page=${page}&size=${PAGE_SIZE}&sort=createdDate,desc`;
       if (searchTerm) url += `&q=${encodeURIComponent(searchTerm)}`;
       if (selGender) url += `&gender=${selGender}`;
       if (selCity) url += `&city=${encodeURIComponent(selCity)}`;
@@ -316,8 +316,7 @@ const AdminKhachHang = () => {
     if (!editCustomer.city)                   errs.city = 'Vui lòng chọn tỉnh/thành phố';
     if (!editCustomer.district)               errs.district = 'Vui lòng chọn quận/huyện';
     if (!editCustomer.ward)                   errs.ward = 'Vui lòng chọn phường/xã';
-    if (editCustomer.contactPhone?.trim() && !phoneRe.test(editCustomer.contactPhone.trim()))
-      errs.contactPhone = 'SĐT người liên hệ phải từ 9–11 chữ số';
+    // Removed contactPhone validation since the fields are removed from the update form
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -432,7 +431,7 @@ const AdminKhachHang = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['#','Khách hàng','Giới tính','Ngày sinh','Số điện thoại','Người liên hệ','Hành động'].map(h => (
+                {['#','Khách hàng','Giới tính','Ngày sinh','Số điện thoại','Địa chỉ','Hành động'].map(h => (
                   <th key={h} style={{ padding: '12px 18px', textAlign: 'left', fontSize: 12,
                     fontWeight: 700, color: T2, textTransform: 'uppercase', letterSpacing: '.4px',
                     borderBottom: `1px solid ${B}`, whiteSpace: 'nowrap' }}>{h}</th>
@@ -478,26 +477,29 @@ const AdminKhachHang = () => {
                       {item.phone || '—'}
                     </span>
                   </td>
-                  <td style={{ padding: '13px 18px', color: T2, fontSize: 13 }}>{item.contactName || '—'}</td>
+                  <td style={{ padding: '13px 18px', color: T2, fontSize: 13, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={[item.street, item.ward, item.district, item.city].filter(Boolean).join(', ')}>
+                    {[item.street, item.ward, item.district, item.city].filter(Boolean).join(', ') || '—'}
+                  </td>
                   <td style={{ padding: '13px 18px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       {/* detail */}
-                      <button onClick={() => { setSelected(item); setShowDetail(true); }} title="Xem chi tiết" style={{
-                        width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: `1.5px solid ${A}22`, background: `${A}11`, color: A, cursor: 'pointer', fontSize: 14, transition: 'all .15s',
+                      <button onClick={() => { setSelected(item); setShowDetail(true); }} style={{
+                        padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(14,165,233,0.1)', color: A,
+                        fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'all .15s'
                       }}
                         onMouseEnter={e => { e.currentTarget.style.background = A; e.currentTarget.style.color = '#fff'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = `${A}11`; e.currentTarget.style.color = A; }}>
-                        <FontAwesomeIcon icon={faEye} />
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(14,165,233,0.1)'; e.currentTarget.style.color = A; }}>
+                        <FontAwesomeIcon icon={faEye} /> Chi tiết
                       </button>
                       {/* edit */}
-                      <button onClick={() => handleEditClick(item)} title="Sửa" style={{
-                        width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: `1.5px solid ${W}22`, background: `${W}11`, color: W, cursor: 'pointer', fontSize: 14, transition: 'all .15s',
+                      <button onClick={() => handleEditClick(item)} style={{
+                        padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(245,158,11,0.1)', color: W,
+                        fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'all .15s'
                       }}
                         onMouseEnter={e => { e.currentTarget.style.background = W; e.currentTarget.style.color = '#fff'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = `${W}11`; e.currentTarget.style.color = W; }}>
-                        <FontAwesomeIcon icon={faEdit} />
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.1)'; e.currentTarget.style.color = W; }}>
+                        <FontAwesomeIcon icon={faEdit} /> Sửa
                       </button>
                     </div>
                   </td>
@@ -652,26 +654,7 @@ const AdminKhachHang = () => {
               </Field>
             </div>
 
-            {/* contact */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
-              <div style={{ paddingRight: 12 }}>
-                <Field label="Người liên hệ">
-                  <input style={inpStyle(false)} value={editCustomer.contactName || ''}
-                    onChange={e => setEditCustomer({ ...editCustomer, contactName: e.target.value })} />
-                </Field>
-              </div>
-              <div style={{ paddingLeft: 12 }}>
-                <Field label="Mối quan hệ">
-                  <input style={inpStyle(false)} value={editCustomer.contactRelationship || ''}
-                    onChange={e => setEditCustomer({ ...editCustomer, contactRelationship: e.target.value })} />
-                </Field>
-              </div>
-            </div>
-            <Field label="SĐT người liên hệ" error={errors.contactPhone}>
-              <input style={inpStyle(errors.contactPhone)} value={editCustomer.contactPhone || ''}
-                onChange={e => { setEditCustomer({ ...editCustomer, contactPhone: e.target.value });
-                  if (errors.contactPhone) setErrors({ ...errors, contactPhone: null }); }} />
-            </Field>
+            {/* contact fields removed */}
             <Field label="Ảnh đại diện">
               <input type="file" ref={avatarRef} accept="image/*" style={{ ...inpStyle(false), padding: '7px 12px' }} />
               {editCustomer.avatar && (

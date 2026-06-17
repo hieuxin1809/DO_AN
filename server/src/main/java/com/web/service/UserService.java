@@ -396,13 +396,64 @@ public class UserService {
         }
     }
 
-    public List<User> getUserByRole(String role) {
+    public List<Map<String, Object>> getUserByRole(String role) {
+        List<User> list;
         if (role == null) {
-            return userRepository.findAll(
+            list = userRepository.findAll(
                     Sort.by(Sort.Direction.DESC, "createdDate")
             );
+        } else {
+            list = userRepository.getUserByRole(role);
         }
-        return userRepository.getUserByRole(role);
+
+        List<Map<String, Object>> resultList = new ArrayList<>();
+        for (User u : list) {
+            if (u.getAuthorities() != null) {
+                String roleName = u.getAuthorities().getName();
+                if ("NURSE".equalsIgnoreCase(roleName) || "Support Staff".equalsIgnoreCase(roleName) || "support_staff".equalsIgnoreCase(roleName)) {
+                    continue;
+                }
+            }
+
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", u.getId());
+            map.put("email", u.getEmail());
+            map.put("actived", u.getActived());
+            map.put("createdDate", u.getCreatedDate());
+            map.put("authorities", u.getAuthorities());
+            map.put("userType", u.getUserType());
+
+            String phone = u.getPhoneNumber();
+            String fullname = null;
+
+            if (u.getAuthorities() != null) {
+                String roleName = u.getAuthorities().getName();
+                if ("Customer".equalsIgnoreCase(roleName)) {
+                    CustomerProfile cp = customerProfileRepository.findByUser(u.getId());
+                    if (cp != null) {
+                        if (cp.getPhone() != null && !cp.getPhone().trim().isEmpty()) {
+                            phone = cp.getPhone();
+                        }
+                        fullname = cp.getFullName();
+                    }
+                } else if ("Doctor".equalsIgnoreCase(roleName)) {
+                    Optional<Doctor> docOpt = doctorRepository.findByUser_Id(u.getId());
+                    if (docOpt.isPresent()) {
+                        fullname = docOpt.get().getFullName();
+                    }
+                } else if ("Nurse".equalsIgnoreCase(roleName)) {
+                    Optional<Nurse> nurseOpt = nurseRepository.findByUser_Id(u.getId());
+                    if (nurseOpt.isPresent()) {
+                        fullname = nurseOpt.get().getFullName();
+                    }
+                }
+            }
+
+            map.put("phoneNumber", phone);
+            map.put("fullname", fullname);
+            resultList.add(map);
+        }
+        return resultList;
     }
 
     public List<User> getEmployeesByAuthority(Long authorityId) {
