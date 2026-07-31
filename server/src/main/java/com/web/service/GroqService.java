@@ -76,9 +76,11 @@ public class GroqService {
         "=== QUY TẮC DÙNG TOOL ===\n" +
         "Khi user hỏi về DỮ LIỆU HIỆN CÓ TRONG HỆ THỐNG (lịch tiêm sắp tới, danh sách vaccine, giá, ...), " +
         "BẮT BUỘC dùng tool tương ứng để query data live. TUYỆT ĐỐI KHÔNG bịa data.\n" +
+        "- TUYỆT ĐỐI KHÔNG viết các câu giải thích hoặc thông báo về việc gọi tool/truy vấn dữ liệu (Ví dụ tránh: 'Tôi cần kiểm tra trực tuyến...', 'Tôi sẽ sử dụng công cụ...', 'Vui lòng chờ tôi quét...'). Hãy âm thầm gọi tool và chỉ trả về câu trả lời cuối cùng sau khi đã có kết quả thực tế.\n" +
         "Nếu user hỏi câu kiến thức chung (vaccine gì phòng bệnh gì, tác dụng phụ, độ tuổi tiêm chuẩn) → trả lời thẳng bằng kiến thức bên dưới.\n" +
         "Khi user nói 'tôi', 'của tôi', 'lịch tôi đã đặt', 'mũi đã tiêm của tôi', 'giấy của tôi' " +
-        "→ DÙNG các tool 'getMy*' để query data của user đang đăng nhập.\n" +
+        "→ DÙNG các tool 'getMy*' để query data của user đang đăng nhập. " +
+        "TUYỆT ĐỐI KHÔNG gọi các tool 'getMy*' khi user chỉ hỏi thông tin chung của hệ thống (như lịch tiêm chung, giá vaccine, hoặc số slot trống của một ca tiêm cụ thể). " +
         "Nếu tool trả về 'requireLogin=true' → bảo user vui lòng đăng nhập trước (link /dang-nhap).\n\n" +
 
         // ── QUY TẮC QUAN TRỌNG ──────────────────────────────────────────────
@@ -276,11 +278,15 @@ public class GroqService {
         /* ─── Tool 5: số slot còn trống ─── */
         tools.add(tool(
             "checkSlotsRemaining",
-            "Kiểm tra số chỗ trống còn lại của 1 khung giờ tiêm (vaccine schedule time). " +
-            "Dùng khi user hỏi: 'lịch tiêm ngày X còn chỗ không?', 'còn slot trống ca sáng không?'. " +
-            "Tham số scheduleTimeId lấy từ kết quả listUpcomingSchedules.",
+            "Kiểm tra số chỗ trống còn lại của các khung giờ tiêm. " +
+            "Dùng khi user hỏi: 'lịch tiêm ngày X còn chỗ không?', 'B1 lúc 8h sáng còn slot không?', 'còn slot trống ca sáng không?'. " +
+            "Có thể truyền trực tiếp ID nếu biết, hoặc tìm kiếm bằng các tham số tự nhiên khác.",
             paramObj(
-                paramStr("scheduleTimeId", "ID của VaccineScheduleTime (kết quả từ tool khác).")
+                paramStr("scheduleTimeId", "ID của VaccineScheduleTime (nếu đã biết). Bỏ trống nếu tìm kiếm theo tên/ngày/giờ/trung tâm."),
+                paramStr("vaccineName", "Tên vaccine cần kiểm tra (VD: 'B1', '6in1', 'HPV')."),
+                paramStr("injectDate", "Ngày tiêm cần kiểm tra, định dạng yyyy-MM-dd (VD: '2026-06-19')."),
+                paramStr("time", "Khung giờ bắt đầu tiêm, định dạng HH:mm (VD: '08:00', '14:30')."),
+                paramStr("centerName", "Tên trung tâm tiêm (VD: 'Cầu Giấy').")
             )
         ));
 
@@ -407,6 +413,35 @@ public class GroqService {
             // status: ACTIVE/UPCOMING
             LocalDate startLd = v.getStartDate() != null ? v.getStartDate().toLocalDate() : today;
             item.put("status", startLd.isAfter(today) ? "SẮP MỞ" : "ĐANG MỞ");
+
+            // Lấy thêm danh sách các khung giờ và số slot trống
+            List<VaccineScheduleTime> times = vaccineScheduleTimeRepo.findAllByVaccineScheduleId(v.getId());
+            List<Map<String, Object>> timeList = new ArrayList<>();
+            for (VaccineScheduleTime t : times) {
+                if (t.getInjectDate() != null && t.getInjectDate().toLocalDate().isBefore(today)) {
+                    continue;
+                }
+                long registered = customerScheduleRepo.countByVaccineScheduleTimeId(t.getId());
+                int limit = t.getLimitPeople() == null ? 0 : t.getLimitPeople();
+                long remaining = Math.max(0, limit - registered);
+
+                Map<String, Object> tMap = new LinkedHashMap<>();
+                tMap.put("id", t.getId());
+                tMap.put("injectDate", t.getInjectDate() != null ? t.getInjectDate().toString() : null);
+                
+                String startStr = t.getStart() != null ? t.getStart().toString() : null;
+                if (startStr != null && startStr.length() >= 5) startStr = startStr.substring(0, 5);
+                String endStr = t.getEnd() != null ? t.getEnd().toString() : null;
+                if (endStr != null && endStr.length() >= 5) endStr = endStr.substring(0, 5);
+
+                tMap.put("start", startStr);
+                tMap.put("end", endStr);
+                tMap.put("limit", limit);
+                tMap.put("remaining", remaining);
+                timeList.add(tMap);
+            }
+            item.put("timeSlots", timeList);
+
             out.add(item);
         }
 
@@ -531,27 +566,86 @@ public class GroqService {
         return result;
     }
 
-    /** Tool 5: số slot còn trống của 1 VaccineScheduleTime */
+    /** Tool 5: số slot còn trống của VaccineScheduleTime (hỗ trợ cả tìm kiếm theo tên/ngày/giờ/trung tâm) */
     private Object tool_checkSlotsRemaining(Map<String, Object> args) {
         String idStr = strArg(args, "scheduleTimeId");
-        if (idStr == null) return Map.of("error", "Thiếu scheduleTimeId.");
-        Long stId;
-        try { stId = Long.parseLong(idStr); }
-        catch (Exception e) { return Map.of("error", "scheduleTimeId phải là số."); }
+        if (idStr != null && !idStr.isBlank()) {
+            Long stId;
+            try { stId = Long.parseLong(idStr.trim()); }
+            catch (Exception e) { return Map.of("error", "scheduleTimeId phải là số."); }
 
-        var opt = vaccineScheduleTimeRepo.findById(stId);
-        if (opt.isEmpty()) return Map.of("error", "Không tìm thấy khung giờ #" + stId);
-        VaccineScheduleTime st = opt.get();
+            var opt = vaccineScheduleTimeRepo.findById(stId);
+            if (opt.isEmpty()) return Map.of("error", "Không tìm thấy khung giờ #" + stId);
+            return buildSlotInfo(opt.get());
+        }
 
-        long registered = customerScheduleRepo.countByVaccineScheduleTimeId(stId);
+        // Tìm kiếm linh hoạt theo Tên Vaccine, Ngày, Khung Giờ, Trung tâm
+        String vaccineName = strArg(args, "vaccineName");
+        String injectDate  = strArg(args, "injectDate");
+        String time        = strArg(args, "time");
+        String centerName  = strArg(args, "centerName");
+
+        List<VaccineScheduleTime> all = vaccineScheduleTimeRepo.findAll();
+        List<Map<String, Object>> matches = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+
+        for (VaccineScheduleTime st : all) {
+            if (st.getInjectDate() != null && st.getInjectDate().toLocalDate().isBefore(today)) {
+                continue;
+            }
+            if (st.getVaccineSchedule() == null) continue;
+            VaccineSchedule vs = st.getVaccineSchedule();
+
+            if (vaccineName != null && !vaccineName.isBlank()) {
+                if (vs.getVaccine() == null || !vs.getVaccine().getName().toLowerCase().contains(vaccineName.toLowerCase())) {
+                    continue;
+                }
+            }
+            if (centerName != null && !centerName.isBlank()) {
+                if (vs.getCenter() == null || !vs.getCenter().getCenterName().toLowerCase().contains(centerName.toLowerCase())) {
+                    continue;
+                }
+            }
+            if (injectDate != null && !injectDate.isBlank()) {
+                if (st.getInjectDate() == null || !st.getInjectDate().toString().equals(injectDate)) {
+                    continue;
+                }
+            }
+            if (time != null && !time.isBlank()) {
+                String startStr = st.getStart() != null ? st.getStart().toString() : "";
+                if (!startStr.contains(time)) {
+                    continue;
+                }
+            }
+
+            matches.add(buildSlotInfo(st));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalFound", matches.size());
+        result.put("slots", matches);
+        if (matches.isEmpty()) {
+            result.put("message", "Không tìm thấy khung giờ tiêm nào khớp với yêu cầu.");
+        }
+        return result;
+    }
+
+    private Map<String, Object> buildSlotInfo(VaccineScheduleTime st) {
+        long registered = customerScheduleRepo.countByVaccineScheduleTimeId(st.getId());
         int limit = st.getLimitPeople() == null ? 0 : st.getLimitPeople();
         long remaining = Math.max(0, limit - registered);
 
         Map<String, Object> r = new LinkedHashMap<>();
-        r.put("scheduleTimeId", stId);
+        r.put("scheduleTimeId", st.getId());
         r.put("injectDate", st.getInjectDate() != null ? st.getInjectDate().toString() : null);
-        r.put("start", st.getStart() != null ? st.getStart().toString() : null);
-        r.put("end",   st.getEnd()   != null ? st.getEnd().toString()   : null);
+        
+        String startStr = st.getStart() != null ? st.getStart().toString() : null;
+        if (startStr != null && startStr.length() >= 5) startStr = startStr.substring(0, 5);
+        String endStr = st.getEnd() != null ? st.getEnd().toString() : null;
+        if (endStr != null && endStr.length() >= 5) endStr = endStr.substring(0, 5);
+
+        r.put("start", startStr);
+        r.put("end",   endStr);
         r.put("limit", limit);
         r.put("registered", registered);
         r.put("remaining", remaining);

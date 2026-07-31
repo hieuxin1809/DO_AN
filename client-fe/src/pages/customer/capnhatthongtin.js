@@ -33,9 +33,10 @@ function validateProfile(payload) {
     const ageYears = (Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
     if (ageYears > 130) return 'Ngày sinh không hợp lệ (tuổi quá lớn)!';
 
-    // CMND/CCCD: cho phép trống, nhưng nếu nhập thì phải đúng 9 hoặc 12 chữ số
+    // CMND/CCCD: bắt buộc nhập, và phải đúng 9 hoặc 12 chữ số
     const idCard = (payload.idCard || '').trim();
-    if (idCard && !/^\d{9}$|^\d{12}$/.test(idCard))
+    if (!idCard) return 'Vui lòng nhập số CMND / CCCD!';
+    if (!/^\d{9}$|^\d{12}$/.test(idCard))
         return 'Số CMND (9 chữ số) hoặc CCCD (12 chữ số) không hợp lệ!';
 
     return null;
@@ -322,13 +323,14 @@ function CapNhatThongTin() {
                         </div>
 
                         <div>
-                            <FieldLabel>Số CMND / CCCD</FieldLabel>
+                            <FieldLabel required>Số CMND / CCCD</FieldLabel>
                             <StyledInput
                                 name="idcard"
                                 defaultValue={profile.idCard || ''}
                                 placeholder="9 hoặc 12 chữ số"
                                 maxLength={12}
                                 inputMode="numeric"
+                                required
                             />
                         </div>
 

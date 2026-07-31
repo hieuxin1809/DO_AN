@@ -61,17 +61,15 @@ public class CustomerProfileService {
             throw new MessageException("Ngày sinh không thể là tương lai!");
         }
 
-        /* ─── Validate CMND/CCCD (cho phép trống) ─── */
-        if (customerProfile.getIdCard() != null) {
-            String idCard = customerProfile.getIdCard().trim();
-            if (idCard.isEmpty()) {
-                customerProfile.setIdCard(null);
-            } else if (!idCard.matches("^\\d{9}$|^\\d{12}$")) {
-                throw new MessageException("Số CMND (9 chữ số) hoặc CCCD (12 chữ số) không hợp lệ!");
-            } else {
-                customerProfile.setIdCard(idCard);
-            }
+        /* ─── Validate CMND/CCCD (bắt buộc) ─── */
+        if (customerProfile.getIdCard() == null || customerProfile.getIdCard().trim().isEmpty()) {
+            throw new MessageException("Vui lòng nhập số CMND/CCCD!");
         }
+        String idCard = customerProfile.getIdCard().trim();
+        if (!idCard.matches("^\\d{9}$|^\\d{12}$")) {
+            throw new MessageException("Số CMND (9 chữ số) hoặc CCCD (12 chữ số) không hợp lệ!");
+        }
+        customerProfile.setIdCard(idCard);
 
         /* ─── Kiểm tra trùng số điện thoại ───────────────────── */
         List<CustomerProfile> dupList = customerProfileRepository.findByPhoneAndOtherUser(phone, user.getId());
